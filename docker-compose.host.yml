@@ -1,0 +1,9 @@
+# Used by run.sh when EASYTV_NETWORK=host: the container shares the host network, so ordinary
+# SSDP discovery works from inside it. Linux: works out of the box. Docker Desktop (Windows/macOS,
+# 4.34+): first turn on Settings -> Resources -> Network -> "Enable host networking".
+services:
+  easytv:
+    network_mode: host
+    ports: !reset []
+    environment:
+      EASYTV_PORT: ${EASYTV_PORT:-8080}

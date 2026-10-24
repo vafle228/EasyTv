@@ -1,0 +1,21 @@
+services:
+  easytv:
+    build:
+      context: .
+      target: app
+    image: easytv:latest
+    container_name: easytv
+    ports:
+      # The web UI and the video stream for TVs share this port.
+      - "${EASYTV_PORT:-8080}:8080"
+    environment:
+      EASYTV_PUBLIC_HOST: ${EASYTV_PUBLIC_HOST:-}
+      EASYTV_PUBLIC_PORT: ${EASYTV_PORT:-8080}
+      EASYTV_TV_HOSTS: ${EASYTV_TV_HOSTS:-}
+      EASYTV_TV_LOCATIONS: ${EASYTV_TV_LOCATIONS:-}
+      EASYTV_SCAN_SUBNETS: ${EASYTV_SCAN_SUBNETS:-}
+      EASYTV_DISCOVERY_INTERVAL: ${EASYTV_DISCOVERY_INTERVAL:-15}
+      EASYTV_MAX_VIDEO_HEIGHT: ${EASYTV_MAX_VIDEO_HEIGHT:-1080}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
