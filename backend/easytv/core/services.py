@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Coroutine
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .errors import (
     InvalidVideoUrl,
@@ -23,6 +24,8 @@ from .models import (
     MediaItem,
     PlaybackState,
     PlaybackStatus,
+    Stream,
+    StreamRef,
     Tv,
     TvView,
     Video,
@@ -31,6 +34,7 @@ from .models import (
 )
 from .ports import (
     Clock,
+    FileFetcher,
     IdGenerator,
     MediaUrlResolver,
     TvController,
@@ -41,6 +45,9 @@ from .ports import (
     VideoRepository,
     VideoStorage,
 )
+
+if TYPE_CHECKING:
+    from .catalog import CatalogService
 
 log = logging.getLogger(__name__)
 
@@ -143,10 +150,12 @@ class VideoLibrary:
         downloader: VideoDownloader,
         clock: Clock,
         ids: IdGenerator,
+        fetcher: FileFetcher | None = None,
     ) -> None:
         self._repo = repo
         self._storage = storage
         self._downloader = downloader
+        self._fetcher = fetcher
         self._clock = clock
         self._ids = ids
         self._tasks: set[asyncio.Task[None]] = set()
@@ -193,10 +202,29 @@ class VideoLibrary:
             origin_url=url,
         )
         self._repo.add(video)
-        task = asyncio.get_running_loop().create_task(self._download(video))
+        self._start(self._download(video))
+        return video
+
+    def add_stream(self, stream: Stream, title: str, origin: str) -> Video:
+        """Save an episode from a site: download its direct link in the background."""
+        if self._fetcher is None:
+            raise RuntimeError("no FileFetcher configured")
+        video = Video(
+            id=self._ids.new_id(),
+            title=title,
+            source=VideoSource.ANIMEGO,
+            status=VideoStatus.PENDING,
+            created_at=self._clock.now(),
+            origin_url=origin,
+        )
+        self._repo.add(video)
+        self._start(self._fetch(video, stream))
+        return video
+
+    def _start(self, job: Coroutine[Any, Any, None]) -> None:
+        task = asyncio.get_running_loop().create_task(job)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-        return video
 
     async def wait_downloads(self) -> None:
         """Wait for background downloads (used on shutdown and in tests)."""
@@ -236,6 +264,27 @@ class VideoLibrary:
         video.status = VideoStatus.READY
         self._repo.update(video)
 
+    async def _fetch(self, video: Video, stream: Stream) -> None:
+        assert self._fetcher is not None
+        video.status = VideoStatus.DOWNLOADING
+        self._repo.update(video)
+        target = self._storage.directory / f"{video.id}.mp4"
+
+        def on_progress(fraction: float, _: str | None) -> None:
+            video.progress = max(0.0, min(fraction, 0.99))
+
+        try:
+            size = await asyncio.to_thread(self._fetcher.fetch, stream.url, stream.headers, target, on_progress)
+        except Exception as exc:
+            log.warning("Download of %s failed: %s", video.origin_url, exc)
+            self._storage.delete(target)
+            video.status = VideoStatus.FAILED
+            video.error = str(exc) or exc.__class__.__name__
+            self._repo.update(video)
+            return
+        video.path, video.size, video.progress, video.status = target, size, 1.0, VideoStatus.READY
+        self._repo.update(video)
+
 
 class PlaybackService:
     def __init__(
@@ -244,12 +293,15 @@ class PlaybackService:
         videos: VideoLibrary,
         controller: TvController,
         urls: MediaUrlResolver,
+        catalog: CatalogService | None = None,
     ) -> None:
         self._tvs = tvs
         self._videos = videos
         self._controller = controller
         self._urls = urls
+        self._catalog = catalog
         self._now_playing: dict[str, str] = {}
+        self._streams: dict[str, tuple[StreamRef, str]] = {}
 
     async def play(self, tv_id: str, video_id: str) -> PlaybackStatus:
         tv = self._tvs.get(tv_id).tv
@@ -259,7 +311,19 @@ class PlaybackService:
         media = MediaItem(url=self._urls.url_for(video, tv), title=video.title, mime=video.mime)
         await self._controller.play(tv, media)
         self._now_playing[tv_id] = video_id
+        self._streams.pop(tv_id, None)
         return PlaybackStatus(state=PlaybackState.TRANSITIONING, video_id=video_id)
+
+    async def play_stream(self, tv_id: str, ref: StreamRef, title: str) -> PlaybackStatus:
+        """Show an episode from a site: the TV gets a link to our proxy, which fetches a fresh CDN link."""
+        assert self._catalog is not None
+        tv = self._tvs.get(tv_id).tv
+        await self._catalog.resolve(ref)  # fail here, with a readable error, rather than on the TV
+        media = MediaItem(url=self._urls.url_for_path(ref.path, tv), title=title, mime="video/mp4")
+        await self._controller.play(tv, media)
+        self._now_playing.pop(tv_id, None)
+        self._streams[tv_id] = (ref, title)
+        return PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref)
 
     async def pause(self, tv_id: str) -> None:
         await self._controller.pause(self._tvs.get(tv_id).tv)
@@ -270,13 +334,20 @@ class PlaybackService:
     async def stop(self, tv_id: str) -> None:
         await self._controller.stop(self._tvs.get(tv_id).tv)
         self._now_playing.pop(tv_id, None)
+        self._streams.pop(tv_id, None)
 
     async def status(self, tv_id: str) -> PlaybackStatus:
         tv = self._tvs.get(tv_id).tv
         info = await self._controller.info(tv)
         video_id = self._now_playing.get(tv_id)
+        stream = self._streams.get(tv_id)
         if info.state in (PlaybackState.STOPPED, PlaybackState.NO_MEDIA):
-            video_id = None
+            video_id, stream = None, None
         return PlaybackStatus(
-            state=info.state, video_id=video_id, position_s=info.position_s, duration_s=info.duration_s
+            state=info.state,
+            video_id=video_id,
+            position_s=info.position_s,
+            duration_s=info.duration_s,
+            title=stream[1] if stream else None,
+            stream=stream[0] if stream else None,
         )

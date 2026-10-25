@@ -27,6 +27,7 @@ class Settings:
     tv_locations: list[str] = field(default_factory=list)
     scan_subnets: list[str] = field(default_factory=list)
     max_video_height: int = 1080
+    animego_url: str = "https://animego.me"
 
     @property
     def seeds(self) -> list[str]:
@@ -54,4 +55,5 @@ class Settings:
             tv_locations=_list(env("EASYTV_TV_LOCATIONS")),
             scan_subnets=_list(env("EASYTV_SCAN_SUBNETS")),
             max_video_height=int(env("EASYTV_MAX_VIDEO_HEIGHT", "1080")),
+            animego_url=env("EASYTV_ANIMEGO_URL", "https://animego.me"),
         )
