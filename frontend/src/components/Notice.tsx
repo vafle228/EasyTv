@@ -1,4 +1,4 @@
-import { BellIcon, CloseIcon } from "./Icons";
+import { Icon } from "./Icons";
 
 interface Props {
   title: string;
@@ -12,7 +12,7 @@ export function Notice({ title, text, tone = "error", onClose }: Props) {
   return (
     <div className={`notice notice--${tone}`} role={tone === "error" ? "alert" : "status"}>
       <span className="notice__icon">
-        <BellIcon />
+        <Icon name="bell" />
       </span>
       <div className="notice__body">
         <strong>{title}</strong>
@@ -20,7 +20,7 @@ export function Notice({ title, text, tone = "error", onClose }: Props) {
       </div>
       {onClose && (
         <button className="icon-btn icon-btn--flat" onClick={onClose} aria-label="Скрыть">
-          <CloseIcon />
+          <Icon name="close" />
         </button>
       )}
     </div>

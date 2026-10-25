@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from "react";
 
-/** Minimal History-API router: the app has two screens, so a library would be overkill. */
+/** Minimal History-API router: routes are a handful of regexes in App, so a library would be overkill. */
 
 interface RouterValue {
   path: string;
-  navigate: (to: string) => void;
+  navigate: (to: string, options?: { replace?: boolean }) => void;
 }
 
 const RouterContext = createContext<RouterValue>({ path: "/", navigate: () => {} });
@@ -19,8 +19,9 @@ export function Router({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const navigate = useCallback((to: string) => {
-    if (to !== window.location.pathname) window.history.pushState(null, "", to);
+  const navigate = useCallback((to: string, options?: { replace?: boolean }) => {
+    if (options?.replace) window.history.replaceState(null, "", to);
+    else if (to !== window.location.pathname) window.history.pushState(null, "", to);
     setPath(to);
     window.scrollTo(0, 0);
   }, []);
