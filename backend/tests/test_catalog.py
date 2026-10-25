@@ -60,12 +60,15 @@ class FakeCdn:
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
         self.expired: set[str] = set()
+        self.ignores_open_range = False  # okcdn answers "bytes=0-" with 200 and the whole file
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if str(request.url) in self.expired:
             return httpx.Response(403)
         rng = request.headers.get("range")
+        if rng == "bytes=0-" and self.ignores_open_range:
+            rng = None
         if rng:
             first, last = rng.removeprefix("bytes=").split("-")
             start, end = int(first), int(last) if last else len(VIDEO) - 1
@@ -197,3 +200,16 @@ def test_cinema_survives_restart_and_can_be_cleared(env, tmp_path):
     assert [t.id for t in restarted.cinema.list()] == [FRIREN]
     assert client.delete(f"/api/cinema/{FRIREN}").status_code == 204
     assert client.delete(f"/api/cinema/{FRIREN}").status_code == 404
+
+
+def test_open_range_from_start_is_answered_with_206(env):
+    """Samsung AU7170 probes with "Range: bytes=0-" and rejects a 200 (UPnP 716): the proxy must say 206."""
+    client, _, cdn, _ = env
+    cdn.ignores_open_range = True
+    url = client.post("/api/catalog/resolve", json={"titleId": FRIREN, "episode": 1, "translationId": "81"}).json()["url"]
+    for method in ("HEAD", "GET"):
+        resp = client.request(method, url, headers={"Range": "bytes=0-"})
+        assert resp.status_code == 206
+        assert resp.headers["content-range"] == f"bytes 0-{len(VIDEO) - 1}/{len(VIDEO)}"
+        assert resp.headers["content-length"] == str(len(VIDEO))
+        assert resp.headers.get_list("accept-ranges") == ["bytes"]

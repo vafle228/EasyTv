@@ -7,6 +7,7 @@ for it), then bytes are relayed with the client's Range header and the DLNA head
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncIterator
 
 import httpx
@@ -21,6 +22,7 @@ from easytv.infrastructure.upnp import DLNA_FLAGS
 log = logging.getLogger(__name__)
 
 _PASS = ("content-length", "content-range", "accept-ranges", "last-modified", "etag")
+_RANGE_FROM_START = re.compile(r"^bytes=0-\s*$")
 
 
 def build_router(catalog: CatalogService, transport: httpx.AsyncBaseTransport | None = None) -> APIRouter:
@@ -58,16 +60,22 @@ def build_router(catalog: CatalogService, transport: httpx.AsyncBaseTransport | 
             await upstream.aclose()
             return Response(status_code=502, content=f"CDN ответил {upstream.status_code}".encode())
 
-        out = {k: v for k, v in upstream.headers.items() if k.lower() in _PASS}
+        out = {k.lower(): v for k, v in upstream.headers.items() if k.lower() in _PASS}
         out.update(
             {
-                "Content-Type": "video/mp4",
-                "Accept-Ranges": "bytes",
+                "content-type": "video/mp4",
+                "accept-ranges": "bytes",
                 "transferMode.dlna.org": "Streaming",
                 "contentFeatures.dlna.org": DLNA_FLAGS,
             }
         )
         status = upstream.status_code
+        size = out.get("content-length", "")
+        if rng and status == 200 and _RANGE_FROM_START.match(rng) and size.isdigit():
+            # CVH (okcdn) ignores "bytes=0-" and sends the whole file with 200. Newer Samsungs probe with exactly
+            # that range on SetAVTransportURI and reject a 200 with UPnP error 716, so answer like a file server.
+            out["content-range"] = f"bytes 0-{int(size) - 1}/{size}"
+            status = 206
         if request.method == "HEAD":
             await upstream.aclose()
             if not rng:  # answer as if the whole file was asked for
