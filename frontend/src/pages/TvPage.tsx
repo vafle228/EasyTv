@@ -46,7 +46,7 @@ export function TvPage({ tvId }: { tvId: string }) {
           <TvScreen on={online} size="hero">
             <div className="screen-content">
               <span className="screen-content__state">{info && !online ? "Не в сети" : STATE_LABEL[r.state]}</span>
-              {r.active && <span className="screen-content__title">{r.current?.title ?? "Видео"}</span>}
+              {r.active && <span className="screen-content__title">{r.title ?? "Видео"}</span>}
             </div>
           </TvScreen>
 

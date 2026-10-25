@@ -9,14 +9,14 @@ import { R } from "../routes";
 import { Link } from "../router";
 import type { Video } from "../types";
 
-/** Downloads: YouTube is real (the library's pending/downloading/failed items); torrents and sites are a sample. */
+/** Downloads: YouTube and site episodes are real (the library's pending/downloading/failed items); torrents are a sample. */
 export function DownloadsPage() {
   const { videos, reload } = useNowPlaying();
   const [error, setError] = useState<string | null>(null);
 
   const active = videos?.filter((v) => v.status === "downloading" || v.status === "pending") ?? [];
   const failed = videos?.filter((v) => v.status === "failed") ?? [];
-  const done = videos?.filter((v) => v.status === "ready" && v.source === "youtube") ?? [];
+  const done = videos?.filter((v) => v.status === "ready" && v.source !== "upload") ?? [];
   const downloading = active.filter((v) => v.status === "downloading").length;
 
   const remove = async (v: Video) => {
@@ -52,7 +52,7 @@ export function DownloadsPage() {
           </div>
           <div className="stat">
             <span className="stat__v">{done.length}</span>
-            <span className="stat__k">Готово с YouTube</span>
+            <span className="stat__k">Скачано</span>
           </div>
           <div className="stat">
             <span className="stat__v">{failed.length}</span>
@@ -69,12 +69,12 @@ export function DownloadsPage() {
         </div>
         <ul className="videos">
           {videos !== null && active.length + failed.length === 0 && (
-            <li className="videos__empty muted">Ничего не скачивается. Вставьте ссылку на YouTube в поле «Добавить».</li>
+            <li className="videos__empty muted">Ничего не скачивается. Вставьте ссылку на YouTube в поле «Добавить» или скачайте серию со страницы тайтла в «Каталогах».</li>
           )}
           {[...active, ...failed].map((v) => (
             <li key={v.id} className="video">
-              <span className="video__badge video__badge--youtube">
-                <Icon name="youtube" />
+              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : "youtube"}`}>
+                <Icon name={v.source === "animego" ? "globe" : "youtube"} />
               </span>
               <div className="video__main">
                 <span className="video__title" title={v.title}>
@@ -110,8 +110,8 @@ export function DownloadsPage() {
           {videos !== null && done.length === 0 && <li className="videos__empty muted">Пока ничего не скачано.</li>}
           {done.slice(0, 10).map((v) => (
             <li key={v.id} className="video">
-              <span className="video__badge video__badge--youtube">
-                <Icon name="youtube" />
+              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : "youtube"}`}>
+                <Icon name={v.source === "animego" ? "globe" : "youtube"} />
               </span>
               <div className="video__main">
                 <span className="video__title" title={v.title}>
@@ -140,9 +140,9 @@ function TorrentsSample() {
   return (
     <section className="card" ref={ref}>
       <div className="section-head">
-        <h2 className="label">Торренты и сайты</h2>
+        <h2 className="label">Торренты</h2>
       </div>
-      <DemoNote>Торренты, сайты и перекодирование появятся позже. Так это будет выглядеть.</DemoNote>
+      <DemoNote>Торренты и перекодирование появятся позже. Так это будет выглядеть.</DemoNote>
       <ul className="videos" style={{ marginTop: 18 }}>
         <li className="video">
           <span className="video__badge video__badge--torrent">
@@ -159,7 +159,7 @@ function TorrentsSample() {
             </span>
           </div>
           <div className="video__actions">
-            <Link className="btn btn--small" to={R.title}>
+            <Link className="btn btn--small" to={R.cinema}>
               Карточка
             </Link>
             <button className="icon-btn icon-btn--neutral" aria-label="Пауза">
@@ -188,26 +188,6 @@ function TorrentsSample() {
           </div>
         </li>
         <li className="video">
-          <span className="video__badge video__badge--site">
-            <Icon name="globe" />
-          </span>
-          <div className="video__main">
-            <span className="video__title">Дандадан, 3 серия</span>
-            <span className="video__meta num">animego, озвучка AniLibria, 720p, 72%</span>
-            <div className="meter meter--thin">
-              <span className="meter__fill" style={{ width: "72%" }} />
-            </div>
-          </div>
-          <div className="video__actions">
-            <button className="icon-btn icon-btn--neutral" aria-label="Пауза">
-              <Icon name="pause" />
-            </button>
-            <button className="icon-btn" aria-label="Отменить">
-              <Icon name="close" />
-            </button>
-          </div>
-        </li>
-        <li className="video">
           <span className="video__badge video__badge--torrent">
             <Icon name="magnet" />
           </span>
@@ -218,7 +198,7 @@ function TorrentsSample() {
             </span>
           </div>
           <div className="video__actions">
-            <Link className="btn btn--primary btn--small" to={R.film}>
+            <Link className="btn btn--primary btn--small" to={R.cinema}>
               <Icon name="play" />
               Смотреть
             </Link>

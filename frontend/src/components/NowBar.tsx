@@ -43,7 +43,7 @@ export function NowBar() {
         <span className="label" style={{ margin: 0, fontSize: ".72rem" }}>
           Сейчас на экране
         </span>
-        <span className="nowbar__title">{video?.title ?? "Видео"}</span>
+        <span className="nowbar__title">{video?.title ?? playback.title ?? "Видео"}</span>
         <span className="nowbar__meta num">
           {tv.name}, {formatTime(position)} из {formatTime(duration)}
         </span>

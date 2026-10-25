@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// In dev (`npm run dev`) API and media requests go to the Python server on :8080.
+// In dev (`npm run dev`) API, media and stream requests go to the Python server on :8080.
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,6 +9,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:8080",
       "/media": "http://localhost:8080",
+      "/stream": "http://localhost:8080",
     },
   },
 });

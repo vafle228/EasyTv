@@ -81,7 +81,9 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
 
   const q = query.trim().toLowerCase();
   const shown = videos?.filter(
-    (v) => (filter === "all" || filter === v.source) && (!q || v.title.toLowerCase().includes(q)),
+    (v) =>
+      (filter === "all" || filter === v.source || (filter === "cinema" && v.source === "animego")) &&
+      (!q || v.title.toLowerCase().includes(q)),
   );
 
   return (
@@ -167,7 +169,9 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
           <li className="videos__empty muted">
             {videos?.length === 0
               ? "Библиотека пуста. Выберите файл на компьютере или вставьте ссылку на YouTube."
-              : filter === "cinema" || filter === "live"
+              : filter === "cinema"
+                ? "Серий с сайтов здесь пока нет. Скачайте их со страницы тайтла в «Каталогах»."
+                : filter === "live"
                 ? "Этот раздел появится в следующей версии."
                 : "Ничего не нашлось."}
           </li>
@@ -178,8 +182,8 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
           const loading = v.status === "downloading" || v.status === "pending";
           return (
             <li key={v.id} className={`video ${current ? "video--current" : ""}`}>
-              <span className={`video__badge video__badge--${v.source}`}>
-                <Icon name={v.source === "youtube" ? "youtube" : "file"} />
+              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : v.source}`}>
+                <Icon name={v.source === "youtube" ? "youtube" : v.source === "animego" ? "globe" : "file"} />
               </span>
               <div className="video__main">
                 <span className="video__title" title={v.title}>
@@ -224,7 +228,7 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
 }
 
 export function describe(v: Video, playing = false): string {
-  const source = v.source === "youtube" ? "YouTube" : "С компьютера";
+  const source = { youtube: "YouTube", animego: "animego", upload: "С компьютера" }[v.source];
   switch (v.status) {
     case "pending":
       return `${source}, в очереди`;

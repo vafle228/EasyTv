@@ -78,7 +78,7 @@ export function AddPage() {
               <span className="detect__input">https://animego.me/anime/dandadan-…</span>
               <span className="detect__title">Страница на animego</span>
               <span className="detect__text">Открою тайтл в каталоге: там можно выбрать озвучку, смотреть сразу или сохранить себе.</span>
-              <div className="detect__actions"><Link className="btn btn--primary btn--small" to={R.sourceTitle}><Icon name="globe" />Открыть в каталоге</Link></div>
+              <div className="detect__actions"><Link className="btn btn--primary btn--small" to={R.catalog}><Icon name="globe" />Открыть в каталоге</Link></div>
             </div>
           </div>
           <div className="detect">
@@ -87,7 +87,7 @@ export function AddPage() {
               <span className="detect__input">Dune.Part.Two.2024.1080p.mkv, 12.8 ГБ</span>
               <span className="detect__title">Файл с компьютера</span>
               <span className="detect__text">Похоже на фильм «Дюна: Часть вторая» (2024). Положу в кинотеатр с описанием и постером.</span>
-              <div className="detect__actions"><Link className="btn btn--primary btn--small" to={R.film}><Icon name="upload" />Загрузить в кинотеатр</Link><button className="btn btn--small">Просто в библиотеку</button></div>
+              <div className="detect__actions"><Link className="btn btn--primary btn--small" to={R.cinema}><Icon name="upload" />Загрузить в кинотеатр</Link><button className="btn btn--small">Просто в библиотеку</button></div>
             </div>
           </div>
         </div>

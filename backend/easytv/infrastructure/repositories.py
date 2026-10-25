@@ -7,7 +7,7 @@ from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 
-from easytv.core.models import Tv, Video, VideoSource, VideoStatus
+from easytv.core.models import SavedTitle, TitleKind, Tv, Video, VideoSource, VideoStatus
 
 log = logging.getLogger(__name__)
 
@@ -133,6 +133,77 @@ class JsonVideoRepository:
                     "error": v.error,
                 }
                 for v in self._items.values()
+            ]
+            tmp = self._path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(self._path)
+
+
+class JsonSavedTitleRepository:
+    """Titles saved from sites (the cinema), persisted to a JSON file."""
+
+    def __init__(self, path: Path | None) -> None:
+        self._path = path
+        self._items: dict[str, SavedTitle] = {}
+        self._lock = threading.Lock()
+        self._load()
+
+    def upsert(self, item: SavedTitle) -> None:
+        with self._lock:
+            self._items[item.id] = item
+        self._save()
+
+    def get(self, title_id: str) -> SavedTitle | None:
+        return self._items.get(title_id)
+
+    def list(self) -> list[SavedTitle]:
+        return list(self._items.values())
+
+    def delete(self, title_id: str) -> None:
+        with self._lock:
+            self._items.pop(title_id, None)
+        self._save()
+
+    def _load(self) -> None:
+        if not self._path or not self._path.exists():
+            return
+        try:
+            for raw in json.loads(self._path.read_text(encoding="utf-8")):
+                item = SavedTitle(
+                    id=raw["id"],
+                    source=raw["source"],
+                    title=raw["title"],
+                    kind=TitleKind(raw["kind"]),
+                    added_at=datetime.fromisoformat(raw["added_at"]),
+                    poster=raw.get("poster"),
+                    original_title=raw.get("original_title"),
+                    year=raw.get("year"),
+                    episodes_total=raw.get("episodes_total"),
+                    genres=tuple(raw.get("genres") or ()),
+                    translation_id=raw.get("translation_id"),
+                    translation=raw.get("translation"),
+                    last_episode=raw.get("last_episode"),
+                    watched=set(raw.get("watched") or ()),
+                    updated_at=datetime.fromisoformat(raw["updated_at"]) if raw.get("updated_at") else None,
+                )
+                self._items[item.id] = item
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            log.warning("Cannot read %s: %s", self._path, exc)
+
+    def _save(self) -> None:
+        if not self._path:
+            return
+        with self._lock:
+            data = [
+                {
+                    **asdict(t),
+                    "kind": t.kind.value,
+                    "genres": list(t.genres),
+                    "watched": sorted(t.watched),
+                    "added_at": t.added_at.isoformat(),
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                }
+                for t in self._items.values()
             ]
             tmp = self._path.with_suffix(".tmp")
             tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

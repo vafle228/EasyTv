@@ -1,23 +1,29 @@
-/** Paths of every screen. Demo sections (cinema, catalogs, live, torrents) use fixed sample slugs until their backend exists. */
+import type { StreamRef } from "./types";
+
+const enc = encodeURIComponent;
+
+/** Paths of every screen. Demo sections (live, torrents) still use sample data until their backend exists. */
 export const R = {
   main: "/",
   /** The TV that is playing now, or the first one online (see TvRedirect). */
   tv: "/tv",
-  tvOf: (id: string) => `/tv/${encodeURIComponent(id)}`,
+  tvOf: (id: string) => `/tv/${enc(id)}`,
   pick: "/pick",
-  pickFor: (videoId: string) => `/pick/${encodeURIComponent(videoId)}`,
+  pickFor: (videoId: string) => `/pick/${enc(videoId)}`,
   phone: "/remote",
-  phoneOf: (tvId: string) => `/remote/${encodeURIComponent(tvId)}`,
+  phoneOf: (tvId: string) => `/remote/${enc(tvId)}`,
   watch: "/watch",
-  watchOf: (videoId: string) => `/watch/${encodeURIComponent(videoId)}`,
+  watchOf: (videoId: string) => `/watch/${enc(videoId)}`,
+  /** An episode from a site, played in this browser through the server's proxy. */
+  watchStream: (r: StreamRef) =>
+    `/watch/animego/${enc(r.titleId)}/${r.episode}/${enc(r.translationId)}` +
+    (r.provider && r.provider !== "auto" ? `/${enc(r.provider)}` : ""),
   add: "/add",
   torrent: "/add/torrent",
   downloads: "/downloads",
   cinema: "/cinema",
-  title: "/cinema/frieren",
-  film: "/cinema/dune-part-two",
   catalog: "/catalog",
-  sourceTitle: "/catalog/naruto-shippuden",
-  voice: "/catalog/naruto-shippuden/voice",
+  catalogSearch: (q: string) => `/catalog?q=${enc(q)}`,
+  catalogTitle: (id: string) => `/catalog/${enc(id)}`,
   live: "/live",
 } as const;

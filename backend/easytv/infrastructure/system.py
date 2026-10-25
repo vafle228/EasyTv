@@ -29,8 +29,11 @@ class LanMediaUrlResolver:
         self._port = public_port
 
     def url_for(self, video: Video, tv: Tv) -> str:
+        return self.url_for_path(f"/media/{video.id}{video.extension}", tv)
+
+    def url_for_path(self, path: str, tv: Tv) -> str:
         host = self._host or self._local_address_towards(tv.ip)
-        return f"http://{host}:{self._port}/media/{video.id}{video.extension}"
+        return f"http://{host}:{self._port}{path}"
 
     @staticmethod
     def _local_address_towards(ip: str) -> str:

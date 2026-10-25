@@ -37,3 +37,21 @@ class UnsupportedVideoFormat(EasyTvError):
 
 class TvCommandError(EasyTvError):
     """The TV rejected a command or did not respond."""
+
+
+class CatalogError(EasyTvError):
+    """A site (animego) didn't answer as expected: network, protection or changed layout."""
+
+
+class CatalogItemNotFound(CatalogError):
+    """The site has no such title, episode or dub."""
+
+
+class StreamUnavailable(EasyTvError):
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"Не получилось достать видео: {detail}")
+
+
+class TitleNotSaved(EasyTvError):
+    def __init__(self, title_id: str) -> None:
+        super().__init__(f"Тайтла {title_id} нет в кинотеатре")

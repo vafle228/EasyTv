@@ -2,19 +2,16 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { AppBar, TabBar } from "./components/AppBar";
 import { AddPage } from "./demo/AddPage";
-import { CatalogPage } from "./demo/CatalogPage";
-import { CinemaPage } from "./demo/CinemaPage";
-import { FilmPage } from "./demo/FilmPage";
 import { LivePage } from "./demo/LivePage";
-import { SourceTitlePage } from "./demo/SourceTitlePage";
-import { TitlePage } from "./demo/TitlePage";
 import { TorrentPage } from "./demo/TorrentPage";
-import { VoiceDialog } from "./demo/VoiceDialog";
 import { useNowPlaying } from "./nowPlaying";
+import { CatalogPage } from "./pages/CatalogPage";
+import { CinemaPage } from "./pages/CinemaPage";
 import { DownloadsPage } from "./pages/DownloadsPage";
 import { MainPage } from "./pages/MainPage";
 import { PickDialog } from "./pages/PickDialog";
 import { RemotePage } from "./pages/RemotePage";
+import { TitlePage } from "./pages/TitlePage";
 import { TvPage } from "./pages/TvPage";
 import { WatchPage } from "./pages/WatchPage";
 import { R } from "./routes";
@@ -37,12 +34,23 @@ const param = (re: RegExp, path: string) => {
 };
 
 export function App() {
-  const { path, navigate } = useRouter();
+  const { path: location, navigate } = useRouter();
+  const path = location.split("?")[0];
   const back = () => (window.history.length > 1 ? window.history.back() : navigate(R.main));
 
   // phone screens: no app bar, their own bottom bar
   const remote = param(/^\/remote(?:\/([^/]+))?\/?$/, path);
   if (remote !== undefined) return <RemotePage tvId={remote} />;
+  const site = /^\/watch\/animego\/([^/]+)\/(\d+)\/([^/]+)(?:\/([^/]+))?\/?$/.exec(path);
+  if (site) {
+    const ref = {
+      titleId: decodeURIComponent(site[1]),
+      episode: Number(site[2]),
+      translationId: decodeURIComponent(site[3]),
+      provider: site[4] ? decodeURIComponent(site[4]) : "auto",
+    };
+    return <WatchPage key={path} videoId={null} stream={ref} />;
+  }
   const watch = param(/^\/watch(?:\/([^/]+))?\/?$/, path);
   if (watch !== undefined) return <WatchPage videoId={watch} />;
 
@@ -59,6 +67,7 @@ export function App() {
   }
 
   const tvId = param(/^\/tv\/([^/]+)\/?$/, path);
+  const titleId = param(/^\/catalog\/([^/]+)\/?$/, path);
   let page: ReactNode;
   if (path === R.main) page = <MainPage />;
   else if (tvId) page = <TvPage key={tvId} tvId={tvId} />;
@@ -67,19 +76,12 @@ export function App() {
   else if (path === R.add) page = <AddPage />;
   else if (path === R.torrent) page = <TorrentPage />;
   else if (path === R.cinema) page = <CinemaPage />;
-  else if (path === R.title) page = <TitlePage />;
-  else if (path === R.film) page = <FilmPage />;
   else if (path === R.catalog) page = <CatalogPage />;
-  else if (path === R.sourceTitle || path === R.voice) page = <SourceTitlePage />;
+  else if (titleId) page = <TitlePage key={titleId} titleId={titleId} />;
   else if (path === R.live) page = <LivePage />;
   else page = <NotFound />;
 
-  return (
-    <>
-      <Shell>{page}</Shell>
-      {path === R.voice && <VoiceDialog />}
-    </>
-  );
+  return <Shell>{page}</Shell>;
 }
 
 /** "/tv": the TV that is playing now, or the first one online. */

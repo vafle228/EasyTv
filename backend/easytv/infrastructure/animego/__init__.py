@@ -1,0 +1,134 @@
+"""animego.me as a `CatalogSource`: search, title card, episodes, dubs and fresh direct links."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import date
+
+from easytv.core.errors import CatalogItemNotFound
+from easytv.core.models import CatalogTitle, Collection, Episode, Stream, StreamRef, TitleDetails, TitleKind, Variant
+
+from .client import (
+    DEFAULT_BASE_URL,
+    SUPPORTED_PROVIDERS,
+    AnimeGo,
+    AnimeGoError,
+    Http,
+    RawStream,
+    Resolver,
+    SearchResult,
+    rank_options,
+)
+
+_SEASONS = (("winter", "Зима"), ("spring", "Весна"), ("summer", "Лето"), ("fall", "Осень"))
+_BY_RATING = "sort=rating&direction=desc"
+
+
+def _lists(today: date) -> dict[str, tuple[str, str]]:
+    """Collection id → (title, path on animego). The season follows the calendar: Jan–Mar is winter, and so on."""
+    key, name = _SEASONS[(today.month - 1) // 3]
+    return {
+        "ongoing": ("Онгоинги", f"/anime/status/ongoing?{_BY_RATING}"),
+        "season": (f"{name} {today.year}", f"/anime/season/{today.year}/{key}?{_BY_RATING}"),
+        "top": ("Лучшее", f"/anime?{_BY_RATING}"),
+        "movies": ("Фильмы", f"/anime/type/movie?{_BY_RATING}"),
+        "anons": ("Анонсы", "/anime/status/anons"),
+    }
+
+
+__all__ = ["AnimegoCatalog", "Http"]
+
+
+class AnimegoCatalog:
+    name = "animego"
+
+    def __init__(
+        self, http: Http | None = None, base_url: str = DEFAULT_BASE_URL, today: Callable[[], date] = date.today
+    ) -> None:
+        self._today = today
+        self._http = http or Http()
+        self._site = AnimeGo(self._http, base_url)
+        self._resolver = Resolver(self._http, base_url)
+
+    def search(self, query: str) -> list[CatalogTitle]:
+        return [_title(r) for r in self._site.search(query)]
+
+    def collections(self) -> list[Collection]:
+        return [Collection(id=k, title=v[0]) for k, v in _lists(self._today()).items()]
+
+    def collection(self, collection_id: str, page: int) -> list[CatalogTitle]:
+        lists = _lists(self._today())
+        if collection_id not in lists:
+            raise CatalogItemNotFound(f"на animego нет подборки {collection_id}")
+        try:
+            return [_title(r) for r in self._site.listing(lists[collection_id][1], page)]
+        except CatalogItemNotFound:
+            return []  # past the last page
+
+    def title(self, title_id: str) -> TitleDetails:
+        i = self._site.info(title_id)
+        return TitleDetails(
+            id=title_id,
+            title=i.title,
+            kind=TitleKind.MOVIE if i.kind == "movie" else TitleKind.SERIES,
+            url=i.url,
+            original_title=i.alternate_name,
+            description=i.description,
+            poster=i.poster,
+            genres=tuple(i.genres),
+            year=(i.date_published or "")[:4] or None,
+            episodes_total=i.episodes_total,
+            rating=i.rating,
+            studio=i.studio,
+        )
+
+    def episodes(self, title_id: str) -> list[Episode]:
+        return [Episode(number=e.number, title=e.title, date=e.release_date) for e in self._site.episodes(title_id)]
+
+    def variants(self, title_id: str, episode: int) -> list[Variant]:
+        grouped: dict[str, tuple[str, list[str]]] = {}
+        for o in rank_options(self._site.players(title_id, episode)):
+            if o.provider not in SUPPORTED_PROVIDERS:
+                continue
+            name, providers = grouped.setdefault(o.translation_id, (o.translation, []))
+            if o.provider not in providers:
+                providers.append(o.provider)
+        return [Variant(translation_id=k, translation=name, providers=tuple(p)) for k, (name, p) in grouped.items()]
+
+    def streams(self, ref: StreamRef) -> list[Stream]:
+        options = [o for o in self._site.players(ref.title_id, ref.episode) if o.translation_id == ref.translation_id]
+        if ref.provider != "auto":
+            options = [o for o in options if o.provider == ref.provider]
+        if not options:
+            raise CatalogItemNotFound("на animego нет такой озвучки у этой серии")
+        fallback: list[RawStream] = []
+        errors: list[str] = []
+        for opt in rank_options(options):
+            try:
+                found = self._resolver.resolve(opt)
+            except AnimeGoError as e:
+                errors.append(f"{opt.provider_title}: {e}")
+                continue
+            if any(s.kind == "mp4" for s in found):
+                return [_stream(s) for s in found]
+            fallback = fallback or found
+        if fallback:
+            return [_stream(s) for s in fallback]
+        raise AnimeGoError("ни один плеер не отдал ссылку. " + "; ".join(errors))
+
+
+def _title(r: SearchResult) -> CatalogTitle:
+    return CatalogTitle(
+        id=r.title_id,
+        title=r.title,
+        original_title=r.original_title,
+        kind=r.kind,
+        year=r.year,
+        rating=r.rating,
+        poster=r.poster,
+        url=r.url,
+    )
+
+
+def _stream(s: RawStream) -> Stream:
+    return Stream(provider=s.provider, translation=s.translation, kind=s.kind, quality=s.quality, url=s.url, headers=s.headers)

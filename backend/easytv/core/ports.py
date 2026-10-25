@@ -7,7 +7,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from .models import DownloadResult, MediaItem, PlaybackInfo, Tv, Video
+from .models import (
+    CatalogTitle,
+    Collection,
+    DownloadResult,
+    Episode,
+    MediaItem,
+    PlaybackInfo,
+    SavedTitle,
+    Stream,
+    StreamRef,
+    TitleDetails,
+    Tv,
+    Variant,
+    Video,
+)
 
 
 class TvDiscovery(Protocol):
@@ -41,6 +55,11 @@ class VideoDownloader(Protocol):
         """Blocking download. `on_progress(fraction 0..1, title or None)` may be called from the worker thread."""
 
 
+class FileFetcher(Protocol):
+    def fetch(self, url: str, headers: dict[str, str], target: Path, on_progress: ProgressCallback) -> int:
+        """Blocking download of a direct link to `target`; returns its size."""
+
+
 class VideoStorage(Protocol):
     @property
     def directory(self) -> Path: ...
@@ -63,9 +82,42 @@ class VideoRepository(Protocol):
     def delete(self, video_id: str) -> None: ...
 
 
+class CatalogSource(Protocol):
+    """A site with titles to browse and watch (animego). Blocking calls; errors are `CatalogError`."""
+
+    name: str
+
+    def search(self, query: str) -> list[CatalogTitle]: ...
+    def collections(self) -> list[Collection]:
+        """Lists to show before the user searches; the first one is the default."""
+
+    def collection(self, collection_id: str, page: int) -> list[CatalogTitle]:
+        """One page of a list (pages start at 1); empty past the end."""
+
+    def title(self, title_id: str) -> TitleDetails: ...
+    def episodes(self, title_id: str) -> list[Episode]:
+        """Episodes of a series; empty for a movie."""
+
+    def variants(self, title_id: str, episode: int) -> list[Variant]:
+        """Dubs and players of an episode (`episode` 0 for a movie)."""
+
+    def streams(self, ref: StreamRef) -> list[Stream]:
+        """Fresh direct links, best first. Tries the players of the dub in priority order."""
+
+
+class SavedTitleRepository(Protocol):
+    def upsert(self, item: SavedTitle) -> None: ...
+    def get(self, title_id: str) -> SavedTitle | None: ...
+    def list(self) -> list[SavedTitle]: ...
+    def delete(self, title_id: str) -> None: ...
+
+
 class MediaUrlResolver(Protocol):
     def url_for(self, video: Video, tv: Tv) -> str:
         """Absolute http URL at which `tv` can fetch `video`."""
+
+    def url_for_path(self, path: str, tv: Tv) -> str:
+        """Absolute http URL of a path on this server, as `tv` reaches it."""
 
 
 class Clock(Protocol):
