@@ -7,6 +7,7 @@ from pydantic.alias_generators import to_camel
 
 from easytv.core.models import (
     CatalogTitle,
+    Collection,
     Episode,
     PlaybackState,
     PlaybackStatus,
@@ -145,6 +146,15 @@ class CatalogTitleDto(Dto):
             poster=t.poster,
             saved=saved,
         )
+
+
+class CollectionDto(Dto):
+    id: str
+    title: str
+
+    @classmethod
+    def of(cls, c: Collection) -> CollectionDto:
+        return cls(id=c.id, title=c.title)
 
 
 class SavedTitleDto(Dto):

@@ -7,6 +7,7 @@ from easytv.core.services import PlaybackService, VideoLibrary
 
 from .schemas import (
     CatalogTitleDto,
+    CollectionDto,
     EpisodeDto,
     PlaybackDto,
     PlayStreamRequest,
@@ -35,6 +36,15 @@ def build_router(
     @router.get("/catalog/search", response_model=list[CatalogTitleDto])
     async def search(q: str) -> list[CatalogTitleDto]:
         return [CatalogTitleDto.of(t, cinema.find(t.id) is not None) for t in await catalog.search(q)]
+
+    @router.get("/catalog/collections", response_model=list[CollectionDto])
+    def collections() -> list[CollectionDto]:
+        return [CollectionDto.of(c) for c in catalog.collections()]
+
+    @router.get("/catalog/collections/{collection_id}", response_model=list[CatalogTitleDto])
+    async def collection(collection_id: str, page: int = 1) -> list[CatalogTitleDto]:
+        items = await catalog.collection(collection_id, page)
+        return [CatalogTitleDto.of(t, cinema.find(t.id) is not None) for t in items]
 
     @router.get("/catalog/titles/{title_id}", response_model=TitleDetailsDto)
     async def title(title_id: str) -> TitleDetailsDto:

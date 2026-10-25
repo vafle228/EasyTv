@@ -13,7 +13,7 @@ from easytv.api.app import create_app
 from easytv.config import Settings
 from easytv.container import build_container
 from easytv.core.errors import CatalogItemNotFound
-from easytv.core.models import CatalogTitle, Episode, Stream, StreamRef, TitleDetails, TitleKind, Variant
+from easytv.core.models import CatalogTitle, Collection, Episode, Stream, StreamRef, TitleDetails, TitleKind, Variant
 
 from test_scenarios import FakeController, FakeDiscovery, FakeDownloader, ManualClock
 
@@ -31,6 +31,12 @@ class FakeSite:
 
     def search(self, query: str) -> list[CatalogTitle]:
         return [CatalogTitle(id=FRIREN, title="Провожающая в последний путь Фрирен", kind="Сериал", year="2023")]
+
+    def collections(self) -> list[Collection]:
+        return [Collection("ongoing", "Онгоинги")]
+
+    def collection(self, collection_id: str, page: int) -> list[CatalogTitle]:
+        return self.search("") if page == 1 else []
 
     def title(self, title_id: str) -> TitleDetails:
         if title_id != FRIREN:
@@ -213,3 +219,10 @@ def test_open_range_from_start_is_answered_with_206(env):
         assert resp.headers["content-range"] == f"bytes 0-{len(VIDEO) - 1}/{len(VIDEO)}"
         assert resp.headers["content-length"] == str(len(VIDEO))
         assert resp.headers.get_list("accept-ranges") == ["bytes"]
+
+
+def test_catalog_opens_on_collections(env):
+    client, *_ = env
+    assert client.get("/api/catalog/collections").json() == [{"id": "ongoing", "title": "Онгоинги"}]
+    assert [t["id"] for t in client.get("/api/catalog/collections/ongoing").json()] == [FRIREN]
+    assert client.get("/api/catalog/collections/ongoing", params={"page": 2}).json() == []

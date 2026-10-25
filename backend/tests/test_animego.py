@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -176,3 +177,22 @@ def test_dom_selectors():
     assert root.select_one("#x").text(" ") == "hi there"
     assert root.select_one('p[data-k="2"]').previous_element().tag == "img"
     assert root.select("span") == []
+
+
+def test_ongoing_list_and_seasons():
+    http = FakeHttp()
+    ROUTES.insert(0, (r"/anime/status/ongoing(/\d+)?(\?.*)?$", "list_ongoing.html"))
+    try:
+        catalog = AnimegoCatalog(http, today=lambda: date(2026, 10, 25))
+        assert [(c.id, c.title) for c in catalog.collections()][:2] == [("ongoing", "Онгоинги"), ("season", "Осень 2026")]
+        items = catalog.collection("ongoing", 1)
+        assert len(items) == 3 and items[0].id == "legenda-o-belom-kote-3-4149"
+        assert items[0].original_title == "Da Li Si Rizhi 3rd Season"
+        assert (items[0].kind, items[0].year) == ("ONA", "2026")
+        assert items[0].poster and items[0].poster.startswith("https://img.cdngos.com/")
+        catalog.collection("ongoing", 2)
+        assert http.calls[-1][1] == "https://animego.me/anime/status/ongoing/2?sort=rating&direction=desc"
+        assert catalog.collection("season", 9) == []  # no such page: an empty list, not an error
+        assert "/anime/season/2026/fall/9?sort=rating" in http.calls[-1][1]
+    finally:
+        ROUTES.pop(0)

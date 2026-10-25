@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from .errors import StreamUnavailable, TitleNotSaved
-from .models import CatalogTitle, Episode, SavedTitle, Stream, StreamRef, TitleDetails, Variant
+from .models import CatalogTitle, Collection, Episode, SavedTitle, Stream, StreamRef, TitleDetails, Variant
 from .ports import CatalogSource, Clock, SavedTitleRepository
 
 
@@ -41,6 +41,12 @@ class CatalogService:
         if not query:
             return []
         return await asyncio.to_thread(self._source.search, query)
+
+    def collections(self) -> list[Collection]:
+        return self._source.collections()
+
+    async def collection(self, collection_id: str, page: int = 1) -> list[CatalogTitle]:
+        return await asyncio.to_thread(self._source.collection, collection_id, max(page, 1))
 
     async def title(self, title_id: str) -> TitleDetails:
         return await asyncio.to_thread(self._source.title, title_id)

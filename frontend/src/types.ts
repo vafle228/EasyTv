@@ -43,6 +43,11 @@ export interface StreamRef {
   provider?: string;
 }
 
+export interface Collection {
+  id: string;
+  title: string;
+}
+
 export interface CatalogTitle {
   id: string;
   title: string;

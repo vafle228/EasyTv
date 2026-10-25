@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import date
+
 from easytv.core.errors import CatalogItemNotFound
-from easytv.core.models import CatalogTitle, Episode, Stream, StreamRef, TitleDetails, TitleKind, Variant
+from easytv.core.models import CatalogTitle, Collection, Episode, Stream, StreamRef, TitleDetails, TitleKind, Variant
 
 from .client import (
     DEFAULT_BASE_URL,
@@ -13,8 +16,25 @@ from .client import (
     Http,
     RawStream,
     Resolver,
+    SearchResult,
     rank_options,
 )
+
+_SEASONS = (("winter", "Зима"), ("spring", "Весна"), ("summer", "Лето"), ("fall", "Осень"))
+_BY_RATING = "sort=rating&direction=desc"
+
+
+def _lists(today: date) -> dict[str, tuple[str, str]]:
+    """Collection id → (title, path on animego). The season follows the calendar: Jan–Mar is winter, and so on."""
+    key, name = _SEASONS[(today.month - 1) // 3]
+    return {
+        "ongoing": ("Онгоинги", f"/anime/status/ongoing?{_BY_RATING}"),
+        "season": (f"{name} {today.year}", f"/anime/season/{today.year}/{key}?{_BY_RATING}"),
+        "top": ("Лучшее", f"/anime?{_BY_RATING}"),
+        "movies": ("Фильмы", f"/anime/type/movie?{_BY_RATING}"),
+        "anons": ("Анонсы", "/anime/status/anons"),
+    }
+
 
 __all__ = ["AnimegoCatalog", "Http"]
 
@@ -22,25 +42,28 @@ __all__ = ["AnimegoCatalog", "Http"]
 class AnimegoCatalog:
     name = "animego"
 
-    def __init__(self, http: Http | None = None, base_url: str = DEFAULT_BASE_URL) -> None:
+    def __init__(
+        self, http: Http | None = None, base_url: str = DEFAULT_BASE_URL, today: Callable[[], date] = date.today
+    ) -> None:
+        self._today = today
         self._http = http or Http()
         self._site = AnimeGo(self._http, base_url)
         self._resolver = Resolver(self._http, base_url)
 
     def search(self, query: str) -> list[CatalogTitle]:
-        return [
-            CatalogTitle(
-                id=r.title_id,
-                title=r.title,
-                original_title=r.original_title,
-                kind=r.kind,
-                year=r.year,
-                rating=r.rating,
-                poster=r.poster,
-                url=r.url,
-            )
-            for r in self._site.search(query)
-        ]
+        return [_title(r) for r in self._site.search(query)]
+
+    def collections(self) -> list[Collection]:
+        return [Collection(id=k, title=v[0]) for k, v in _lists(self._today()).items()]
+
+    def collection(self, collection_id: str, page: int) -> list[CatalogTitle]:
+        lists = _lists(self._today())
+        if collection_id not in lists:
+            raise CatalogItemNotFound(f"на animego нет подборки {collection_id}")
+        try:
+            return [_title(r) for r in self._site.listing(lists[collection_id][1], page)]
+        except CatalogItemNotFound:
+            return []  # past the last page
 
     def title(self, title_id: str) -> TitleDetails:
         i = self._site.info(title_id)
@@ -92,6 +115,19 @@ class AnimegoCatalog:
         if fallback:
             return [_stream(s) for s in fallback]
         raise AnimeGoError("ни один плеер не отдал ссылку. " + "; ".join(errors))
+
+
+def _title(r: SearchResult) -> CatalogTitle:
+    return CatalogTitle(
+        id=r.title_id,
+        title=r.title,
+        original_title=r.original_title,
+        kind=r.kind,
+        year=r.year,
+        rating=r.rating,
+        poster=r.poster,
+        url=r.url,
+    )
 
 
 def _stream(s: RawStream) -> Stream:

@@ -123,6 +123,14 @@ class CatalogTitle:
 
 
 @dataclass(frozen=True)
+class Collection:
+    """A list a site keeps for browsing: ongoing, this season, top rated…"""
+
+    id: str
+    title: str
+
+
+@dataclass(frozen=True)
 class TitleDetails:
     id: str
     title: str

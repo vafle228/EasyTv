@@ -217,6 +217,12 @@ class AnimeGo:
         html = self.http.get(f"{self.base}/search/all?q={quote(query)}", cache=True)
         return parse_search(html, self.base)
 
+    def listing(self, path: str, page: int = 1) -> list[SearchResult]:
+        """A catalog list such as "/anime/status/ongoing?sort=rating&direction=desc"; page N lives at "<path>/N"."""
+        route, _, query = path.partition("?")
+        url = self.base + route + (f"/{page}" if page > 1 else "") + (f"?{query}" if query else "")
+        return parse_list(self.http.get(url, cache=True), self.base)
+
     def info(self, title_id: str) -> TitleInfo:
         url = self.title_url(title_id)
         return parse_title_page(self.http.get(url, cache=True), anime_id_of(title_id), url)
@@ -331,6 +337,37 @@ def parse_search(html: str, base: str) -> list[SearchResult]:
         )
     if not out and "ani-grid" not in html and "ничего не найдено" not in html.lower():
         raise LayoutChanged("поиск", "блок .ani-grid__item")
+    return out
+
+
+def parse_list(html: str, base: str) -> list[SearchResult]:
+    """Catalog lists (/anime/status/ongoing, /anime/season/…): rows .ani-list__item, 20 per page."""
+    out: list[SearchResult] = []
+    for item in parse_html(html).select(".ani-list__item"):
+        a = item.select_one(".ani-list__item-title a[href]")
+        m = ANIME_URL_RE.search(a["href"]) if a else None
+        if not a or not m:
+            continue
+        body = item.select_one(".ani-list__item-body")
+        orig = body.select_one("div.fw-lighter") if body else None
+        meta = [s.text() for s in item.select(".ani-list__item-genres__link")]
+        badge = item.select_one(".rating-badge")
+        img = item.select_one("img[src]")
+        out.append(
+            SearchResult(
+                anime_id=int(m.group(2)),
+                title_id=m.group(1),
+                title=a.get("title") or a.text(),
+                original_title=orig.text() or None if orig else None,
+                kind=meta[0] if meta else None,
+                year=next((x for x in meta if re.fullmatch(r"\d{4}", x)), None),
+                rating=badge.text() if badge else None,
+                poster=_abs(img["src"]) if img else None,
+                url=urljoin(base + "/", a["href"]),
+            )
+        )
+    if not out and "ani-list" not in html:
+        raise LayoutChanged("каталог", "блок .ani-list__item")
     return out
 
 

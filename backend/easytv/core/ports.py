@@ -9,6 +9,7 @@ from typing import Protocol
 
 from .models import (
     CatalogTitle,
+    Collection,
     DownloadResult,
     Episode,
     MediaItem,
@@ -87,6 +88,12 @@ class CatalogSource(Protocol):
     name: str
 
     def search(self, query: str) -> list[CatalogTitle]: ...
+    def collections(self) -> list[Collection]:
+        """Lists to show before the user searches; the first one is the default."""
+
+    def collection(self, collection_id: str, page: int) -> list[CatalogTitle]:
+        """One page of a list (pages start at 1); empty past the end."""
+
     def title(self, title_id: str) -> TitleDetails: ...
     def episodes(self, title_id: str) -> list[Episode]:
         """Episodes of a series; empty for a movie."""

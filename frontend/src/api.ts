@@ -1,5 +1,6 @@
 import type {
   CatalogTitle,
+  Collection,
   Episode,
   Playback,
   Resolved,
@@ -70,6 +71,9 @@ export const api = {
     request<Playback>(`${tvPath(id)}/play-stream`, post({ ...ref, title, translation })),
 
   search: (q: string) => request<CatalogTitle[]>(`/api/catalog/search?q=${encodeURIComponent(q)}`),
+  collections: () => request<Collection[]>("/api/catalog/collections"),
+  collection: (id: string, page: number) =>
+    request<CatalogTitle[]>(`/api/catalog/collections/${encodeURIComponent(id)}?page=${page}`),
   title: (id: string) => request<TitleDetails>(titlePath(id)),
   episodes: (id: string) => request<Episode[]>(`${titlePath(id)}/episodes`),
   variants: (id: string, episode: number) => request<Variant[]>(`${titlePath(id)}/variants?episode=${episode}`),
