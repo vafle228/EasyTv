@@ -50,14 +50,14 @@ function Remote({ tvId }: { tvId: string }) {
             <span className="screen-content__state">{info && !online ? "Не в сети" : STATE_LABEL[r.state]}</span>
             {r.active && (
               <span className="screen-content__title" style={{ fontSize: "1.1rem" }}>
-                {r.current?.title ?? "Видео"}
+                {r.title ?? "Видео"}
               </span>
             )}
           </div>
         </TvScreen>
         <div>
           <p className="title" style={{ fontSize: "1.05rem" }}>
-            {r.active ? (r.current?.title ?? "Видео") : "Ничего не играет"}
+            {r.active ? (r.title ?? "Видео") : "Ничего не играет"}
           </p>
           <div className="timeline" style={{ marginTop: 12 }}>
             <div className="meter">

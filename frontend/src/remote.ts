@@ -41,6 +41,7 @@ export function useRemote(tvId: string) {
   const position = playback.data?.positionS ?? null;
   const duration = playback.data?.durationS ?? null;
   const current: Video | undefined = videos.data?.find((v) => v.id === playback.data?.videoId);
+  const title = current?.title ?? playback.data?.title ?? null;
 
   return {
     tv,
@@ -54,6 +55,7 @@ export function useRemote(tvId: string) {
     position,
     duration,
     current,
+    title,
     percent: duration && position != null ? Math.min(100, (position / duration) * 100) : 0,
     pause: () => run(() => api.pause(tvId)),
     resume: () => run(() => api.resume(tvId)),

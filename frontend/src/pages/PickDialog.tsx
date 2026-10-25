@@ -5,14 +5,30 @@ import { TvScreen } from "../components/TvScreen";
 import { isActive, useNowPlaying } from "../nowPlaying";
 import { R } from "../routes";
 import { useRouter } from "../router";
+import type { StreamRef } from "../types";
 
 const HERE = "browser";
 
+/** An episode from a site to show: where it is, how to call it and which dub it is in. */
+export interface StreamTarget {
+  ref: StreamRef;
+  title: string;
+  translation: string | null;
+}
+
 /**
- * "Где показать": pick a TV or this browser for a library video. Without a video (from the demo sections)
- * it still lists the real TVs and just opens the chosen one.
+ * "Где показать": pick a TV or this browser for a library video or an episode from a site.
+ * With neither it still lists the real TVs and just opens the chosen one.
  */
-export function PickDialog({ videoId, onClose }: { videoId: string | null; onClose: () => void }) {
+export function PickDialog({
+  videoId,
+  stream,
+  onClose,
+}: {
+  videoId: string | null;
+  stream?: StreamTarget;
+  onClose: () => void;
+}) {
   const { navigate } = useRouter();
   const { tvs, videos, playback } = useNowPlaying();
   const video = videoId ? videos?.find((v) => v.id === videoId) : undefined;
@@ -30,17 +46,18 @@ export function PickDialog({ videoId, onClose }: { videoId: string | null; onClo
 
   const show = async () => {
     if (selected === HERE) {
-      navigate(videoId ? R.watchOf(videoId) : R.watch);
+      navigate(stream ? R.watchStream(stream.ref) : videoId ? R.watchOf(videoId) : R.watch);
       return;
     }
-    if (!videoId) {
+    if (!videoId && !stream) {
       navigate(R.tvOf(selected));
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await api.play(selected, videoId);
+      if (stream) await api.playStream(selected, stream.ref, stream.title, stream.translation);
+      else if (videoId) await api.play(selected, videoId);
       navigate(R.tvOf(selected));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -55,9 +72,9 @@ export function PickDialog({ videoId, onClose }: { videoId: string | null; onClo
           <div>
             <p className="label">Где показать</p>
             <h1 id="pick-title" className="title">
-              {video?.title ?? (videoId ? "Видео" : "Фрирен, 8 серия")}
+              {stream?.title ?? video?.title ?? (videoId ? "Видео" : "Выберите экран")}
             </h1>
-            {!videoId && <p className="small muted">Пример: кинотеатр ещё в разработке</p>}
+            {stream?.translation && <p className="small muted">Озвучка {stream.translation}</p>}
           </div>
           <button className="icon-btn icon-btn--flat icon-btn--neutral" aria-label="Закрыть" onClick={onClose}>
             <Icon name="close" />
@@ -66,7 +83,11 @@ export function PickDialog({ videoId, onClose }: { videoId: string | null; onClo
         <ul className="picks" role="radiogroup" aria-label="Устройство">
           {tvs?.map((tv) => {
             const p = playback[tv.id];
-            const same = isActive(p) && p.videoId === videoId;
+            const same =
+              isActive(p) &&
+              (stream
+                ? p.stream?.titleId === stream.ref.titleId && p.stream?.episode === stream.ref.episode
+                : p.videoId === videoId);
             return (
               <li key={tv.id}>
                 <button
@@ -124,7 +145,7 @@ export function PickDialog({ videoId, onClose }: { videoId: string | null; onClo
             </button>
             <button className="btn btn--primary btn--small" onClick={show} disabled={busy}>
               <Icon name="play" />
-              {busy ? "Запускаю…" : "Показать"}
+              {busy ? (stream ? "Ищу видео…" : "Запускаю…") : "Показать"}
             </button>
           </div>
         </div>

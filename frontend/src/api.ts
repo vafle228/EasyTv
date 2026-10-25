@@ -1,4 +1,15 @@
-import type { Playback, Tv, Video } from "./types";
+import type {
+  CatalogTitle,
+  Episode,
+  Playback,
+  Resolved,
+  SavedTitle,
+  StreamRef,
+  TitleDetails,
+  Tv,
+  Variant,
+  Video,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -39,6 +50,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const tvPath = (id: string) => `/api/tvs/${encodeURIComponent(id)}`;
+const titlePath = (id: string) => `/api/catalog/titles/${encodeURIComponent(id)}`;
+const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
 
 export const api = {
   tvs: () => request<Tv[]>("/api/tvs"),
@@ -52,6 +65,22 @@ export const api = {
   pause: (id: string) => request<void>(`${tvPath(id)}/pause`, { method: "POST" }),
   resume: (id: string) => request<void>(`${tvPath(id)}/resume`, { method: "POST" }),
   stop: (id: string) => request<void>(`${tvPath(id)}/stop`, { method: "POST" }),
+
+  playStream: (id: string, ref: StreamRef, title: string, translation: string | null) =>
+    request<Playback>(`${tvPath(id)}/play-stream`, post({ ...ref, title, translation })),
+
+  search: (q: string) => request<CatalogTitle[]>(`/api/catalog/search?q=${encodeURIComponent(q)}`),
+  title: (id: string) => request<TitleDetails>(titlePath(id)),
+  episodes: (id: string) => request<Episode[]>(`${titlePath(id)}/episodes`),
+  variants: (id: string, episode: number) => request<Variant[]>(`${titlePath(id)}/variants?episode=${episode}`),
+  /** Finds a fresh link for the browser player and remembers where the user is. */
+  resolve: (ref: StreamRef, translation: string | null) =>
+    request<Resolved>("/api/catalog/resolve", post({ ...ref, translation })),
+  downloadEpisode: (ref: StreamRef, title: string) => request<Video>("/api/catalog/download", post({ ...ref, title })),
+
+  cinema: () => request<SavedTitle[]>("/api/cinema"),
+  saveTitle: (titleId: string) => request<SavedTitle>("/api/cinema", post({ titleId })),
+  unsaveTitle: (titleId: string) => request<void>(`/api/cinema/${encodeURIComponent(titleId)}`, { method: "DELETE" }),
 
   videos: () => request<Video[]>("/api/videos"),
   addYoutube: (url: string) => request<Video>("/api/videos/youtube", { method: "POST", body: JSON.stringify({ url }) }),

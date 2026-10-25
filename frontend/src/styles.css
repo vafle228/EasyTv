@@ -1943,3 +1943,11 @@ button:disabled { cursor: default; }
 /* разделы, где пока демо-данные: бэкенда ещё нет */
 .demo { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: var(--r-pill); box-shadow: var(--press); color: var(--muted); font-size: 0.85rem; font-weight: 600; }
 .demo .i { color: var(--peach); }
+
+/* ---------- site catalogs: real posters over the placeholder art */
+
+.poster__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.thumb .poster__img { border-radius: 0; }
+.poster .poster__badge, .poster .poster__bar { z-index: 1; }
+.opts--list { max-height: min(520px, 55vh); overflow-y: auto; padding: 4px 6px 4px 4px; }
+.video--selected { box-shadow: var(--raise-sm), inset 0 0 0 2px var(--blue); }

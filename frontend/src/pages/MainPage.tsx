@@ -6,9 +6,11 @@ import { Notice } from "../components/Notice";
 import { NowBar } from "../components/NowBar";
 import { TvScreen } from "../components/TvScreen";
 import { tvSubtitle } from "../format";
+import { useLoad } from "../hooks";
 import { isActive, useNowPlaying } from "../nowPlaying";
 import { R } from "../routes";
 import { Link } from "../router";
+import { ResumeRail } from "./CinemaPage";
 
 const PLAYBACK_LABEL = { playing: "Играет", paused: "На паузе", transitioning: "Запускается…" } as const;
 
@@ -99,7 +101,7 @@ export function MainPage() {
           <ul className="tv-grid">
             {tvs.map((tv) => {
               const p = playback[tv.id];
-              const title = videos?.find((v) => v.id === p?.videoId)?.title;
+              const title = videos?.find((v) => v.id === p?.videoId)?.title ?? p?.title;
               return (
                 <li key={tv.id}>
                   <Link to={R.tvOf(tv.id)} className="tv-card">
@@ -176,65 +178,20 @@ export function MainPage() {
   );
 }
 
-/** Positions aren't stored yet, so this shelf shows the mockup's sample until the cinema backend lands. */
+/** Titles from the cinema the user has started, newest first. Hidden until there is one. */
 function ContinueWatching() {
+  const saved = useLoad(api.cinema, "cinema");
+  const started = (saved.data ?? []).filter((t) => t.lastEpisode !== null).slice(0, 6);
+  if (started.length === 0) return null;
   return (
     <section className="card">
       <div className="section-head">
-        <h2 className="label">
-          Продолжить просмотр <span className="tag">пример</span>
-        </h2>
+        <h2 className="label">Продолжить просмотр</h2>
         <Link className="link" to={R.cinema}>
           Весь кинотеатр
         </Link>
       </div>
-      <div className="rail">
-        <Link className="resume" to={R.title}>
-          <div className="thumb">
-            <div className="art art--a" />
-            <span className="thumb__play">
-              <Icon name="play" />
-            </span>
-            <span className="poster__bar">
-              <span style={{ width: "52%" }} />
-            </span>
-          </div>
-          <span className="resume__text">
-            <span className="resume__title">Фрирен, провожающая в последний путь</span>
-            <span className="resume__meta">Аниме, 8 серия, осталось 11 мин</span>
-          </span>
-        </Link>
-        <Link className="resume" to={R.film}>
-          <div className="thumb">
-            <div className="art art--e" />
-            <span className="thumb__play">
-              <Icon name="play" />
-            </span>
-            <span className="poster__bar">
-              <span style={{ width: "44%" }} />
-            </span>
-          </div>
-          <span className="resume__text">
-            <span className="resume__title">Дюна: Часть вторая</span>
-            <span className="resume__meta">Фильм, остановились на 1:12:40</span>
-          </span>
-        </Link>
-        <Link className="resume" to={R.tv}>
-          <div className="thumb">
-            <div className="art art--g" />
-            <span className="thumb__play">
-              <Icon name="play" />
-            </span>
-            <span className="poster__bar">
-              <span style={{ width: "18%" }} />
-            </span>
-          </div>
-          <span className="resume__text">
-            <span className="resume__title">Как приготовить идеальный рамен дома</span>
-            <span className="resume__meta">YouTube, 3:05 из 17:20</span>
-          </span>
-        </Link>
-      </div>
+      <ResumeRail titles={started} />
     </section>
   );
 }
