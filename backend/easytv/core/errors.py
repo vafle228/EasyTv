@@ -35,6 +35,10 @@ class UnsupportedVideoFormat(EasyTvError):
         super().__init__(f"Формат файла не поддерживается: {filename}")
 
 
+class PlaybackNotSeekable(EasyTvError):
+    """The current playback state does not allow seeking."""
+
+
 class TvCommandError(EasyTvError):
     """The TV rejected a command or did not respond."""
 

@@ -206,8 +206,7 @@ def _parse_time(value: str | None) -> int | None:
     if not match:
         return None
     h, m, s = (int(x) for x in match.groups())
-    total = h * 3600 + m * 60 + s
-    return total or None
+    return h * 3600 + m * 60 + s
 
 
 def _xml_value(xml_text: str, name: str) -> str | None:
@@ -242,6 +241,12 @@ class UpnpTvController:
     async def resume(self, tv: Tv) -> None:
         await self._call(tv, "Play", "<Speed>1</Speed>")
 
+    async def seek(self, tv: Tv, position_s: int) -> None:
+        hours, remainder = divmod(position_s, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        target = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        await self._call(tv, "Seek", f"<Unit>REL_TIME</Unit><Target>{target}</Target>")
+
     async def stop(self, tv: Tv) -> None:
         await self._call(tv, "Stop")
 
@@ -256,7 +261,7 @@ class UpnpTvController:
             try:
                 pos = await self._call(tv, "GetPositionInfo")
                 position = _parse_time(_xml_value(pos, "RelTime"))
-                duration = _parse_time(_xml_value(pos, "TrackDuration"))
+                duration = _parse_time(_xml_value(pos, "TrackDuration")) or None
             except TvCommandError:
                 pass
         return PlaybackInfo(state=state, position_s=position, duration_s=duration)

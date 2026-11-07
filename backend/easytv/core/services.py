@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections import defaultdict
 from collections.abc import AsyncIterator, Coroutine
 from dataclasses import replace
 from datetime import timedelta
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from .errors import (
     InvalidVideoUrl,
+    PlaybackNotSeekable,
     TvNotFound,
     TvNotReachable,
     UnsupportedVideoFormat,
@@ -300,6 +302,7 @@ class PlaybackService:
         self._controller = controller
         self._urls = urls
         self._catalog = catalog
+        self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._now_playing: dict[str, str] = {}
         self._streams: dict[str, tuple[StreamRef, str]] = {}
 
@@ -309,9 +312,10 @@ class PlaybackService:
         if video.status is not VideoStatus.READY or video.path is None:
             raise VideoNotReady(video_id)
         media = MediaItem(url=self._urls.url_for(video, tv), title=video.title, mime=video.mime)
-        await self._controller.play(tv, media)
-        self._now_playing[tv_id] = video_id
-        self._streams.pop(tv_id, None)
+        async with self._locks[tv_id]:
+            await self._controller.play(tv, media)
+            self._now_playing[tv_id] = video_id
+            self._streams.pop(tv_id, None)
         return PlaybackStatus(state=PlaybackState.TRANSITIONING, video_id=video_id)
 
     async def play_stream(self, tv_id: str, ref: StreamRef, title: str) -> PlaybackStatus:
@@ -320,21 +324,44 @@ class PlaybackService:
         tv = self._tvs.get(tv_id).tv
         await self._catalog.resolve(ref)  # fail here, with a readable error, rather than on the TV
         media = MediaItem(url=self._urls.url_for_path(ref.path, tv), title=title, mime="video/mp4")
-        await self._controller.play(tv, media)
-        self._now_playing.pop(tv_id, None)
-        self._streams[tv_id] = (ref, title)
+        async with self._locks[tv_id]:
+            await self._controller.play(tv, media)
+            self._now_playing.pop(tv_id, None)
+            self._streams[tv_id] = (ref, title)
         return PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref)
 
     async def pause(self, tv_id: str) -> None:
-        await self._controller.pause(self._tvs.get(tv_id).tv)
+        tv = self._tvs.get(tv_id).tv
+        async with self._locks[tv_id]:
+            await self._controller.pause(tv)
 
     async def resume(self, tv_id: str) -> None:
-        await self._controller.resume(self._tvs.get(tv_id).tv)
+        tv = self._tvs.get(tv_id).tv
+        async with self._locks[tv_id]:
+            await self._controller.resume(tv)
+
+    async def seek(self, tv_id: str, seconds: int, *, relative: bool = False) -> None:
+        tv = self._tvs.get(tv_id).tv
+        async with self._locks[tv_id]:
+            info = await self._controller.info(tv)
+            if info.state not in (PlaybackState.PLAYING, PlaybackState.PAUSED):
+                raise PlaybackNotSeekable("Перемотка доступна во время воспроизведения или паузы")
+            target = seconds
+            if relative:
+                if info.position_s is None:
+                    raise PlaybackNotSeekable("Телевизор не сообщил текущую позицию видео")
+                target += info.position_s
+            target = max(0, target)
+            if info.duration_s is not None:
+                target = min(target, info.duration_s)
+            await self._controller.seek(tv, target)
 
     async def stop(self, tv_id: str) -> None:
-        await self._controller.stop(self._tvs.get(tv_id).tv)
-        self._now_playing.pop(tv_id, None)
-        self._streams.pop(tv_id, None)
+        tv = self._tvs.get(tv_id).tv
+        async with self._locks[tv_id]:
+            await self._controller.stop(tv)
+            self._now_playing.pop(tv_id, None)
+            self._streams.pop(tv_id, None)
 
     async def status(self, tv_id: str) -> PlaybackStatus:
         tv = self._tvs.get(tv_id).tv
