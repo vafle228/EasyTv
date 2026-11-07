@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { TabBar } from "../components/AppBar";
 import { Icon } from "../components/Icons";
+import { PlaybackTimeline } from "../components/PlaybackTimeline";
 import { TvScreen } from "../components/TvScreen";
-import { formatTime } from "../format";
 import { useNowPlaying } from "../nowPlaying";
 import { STATE_LABEL, useRemote } from "../remote";
 import { R } from "../routes";
@@ -59,17 +59,22 @@ function Remote({ tvId }: { tvId: string }) {
           <p className="title" style={{ fontSize: "1.05rem" }}>
             {r.active ? (r.title ?? "Видео") : "Ничего не играет"}
           </p>
-          <div className="timeline" style={{ marginTop: 12 }}>
-            <div className="meter">
-              <span className="meter__fill" style={{ width: `${r.active ? r.percent : 0}%` }} />
-            </div>
-            <span className="timeline__time">
-              {r.active ? `${formatTime(r.position)} / ${formatTime(r.duration)}` : "–:–– / –:––"}
-            </span>
-          </div>
+          <PlaybackTimeline
+            position={r.position}
+            duration={r.duration}
+            enabled={r.canSeekTo}
+            busy={r.busy}
+            onSeek={r.seekTo}
+          />
         </div>
         <div className="remote-grid">
-          <button className="round-btn" aria-label="Назад на 10 секунд" title={LATER} disabled>
+          <button
+            className="round-btn"
+            aria-label="Назад на 10 секунд"
+            title="Назад на 10 секунд"
+            onClick={() => r.seekBy(-10)}
+            disabled={r.busy || !r.canSeekBy}
+          >
             <Icon name="back10" />
           </button>
           {r.state === "paused" ? (
@@ -86,7 +91,13 @@ function Remote({ tvId }: { tvId: string }) {
               <Icon name="pause" />
             </button>
           )}
-          <button className="round-btn" aria-label="Вперёд на 10 секунд" title={LATER} disabled>
+          <button
+            className="round-btn"
+            aria-label="Вперёд на 10 секунд"
+            title="Вперёд на 10 секунд"
+            onClick={() => r.seekBy(10)}
+            disabled={r.busy || !r.canSeekBy}
+          >
             <Icon name="fwd10" />
           </button>
           <button className="round-btn" aria-label="Предыдущее видео" title={LATER} disabled>

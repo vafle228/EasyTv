@@ -11,20 +11,22 @@ export function usePolling<T>(load: () => Promise<T>, intervalMs: number, key: s
   useEffect(() => {
     let alive = true;
     let timer: number | undefined;
+    let revision = 0;
     setData(null);
     setError(null);
 
     const run = async () => {
       window.clearTimeout(timer);
+      const request = ++revision;
       try {
         const value = await loadRef.current();
-        if (!alive) return;
+        if (!alive || request !== revision) return;
         setData(value);
         setError(null);
       } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
+        if (alive && request === revision) setError(e instanceof Error ? e.message : String(e));
       }
-      if (alive) timer = window.setTimeout(run, intervalMs);
+      if (alive && request === revision) timer = window.setTimeout(run, intervalMs);
     };
     tick.current = run;
     void run();
