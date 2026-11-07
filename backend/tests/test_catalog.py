@@ -136,6 +136,11 @@ def test_find_save_and_watch_on_tv(env):
     status = client.get("/api/tvs/tv-living/playback").json()
     assert status["title"] == "Фрирен, 2 серия" and status["stream"]["episode"] == 2
 
+    assert client.post("/api/tvs/tv-living/seek", json={"offsetS": 10}).status_code == 204
+    assert controller.commands[-1] == ("seek", "tv-living", 10)
+    shifted = client.get("/api/tvs/tv-living/playback").json()
+    assert shifted["positionS"] == 10 and shifted["stream"] == status["stream"]
+
     # 4. The TV reads it like a file: HEAD, then ranges; the CDN link is resolved once for all of them
     path = media.url.removeprefix("http://192.168.0.10:8080")
     head = client.head(path)

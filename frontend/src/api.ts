@@ -65,6 +65,8 @@ export const api = {
     request<Playback>(`${tvPath(id)}/play`, { method: "POST", body: JSON.stringify({ videoId }) }),
   pause: (id: string) => request<void>(`${tvPath(id)}/pause`, { method: "POST" }),
   resume: (id: string) => request<void>(`${tvPath(id)}/resume`, { method: "POST" }),
+  seek: (id: string, target: { positionS: number } | { offsetS: number }) =>
+    request<void>(`${tvPath(id)}/seek`, post(target)),
   stop: (id: string) => request<void>(`${tvPath(id)}/stop`, { method: "POST" }),
 
   playStream: (id: string, ref: StreamRef, title: string, translation: string | null) =>

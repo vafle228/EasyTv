@@ -6,7 +6,7 @@ from fastapi import APIRouter, UploadFile
 
 from easytv.core.services import PlaybackService, TvService, VideoLibrary
 
-from .schemas import AddTvRequest, PlaybackDto, PlayRequest, TvDto, VideoDto, YoutubeRequest
+from .schemas import AddTvRequest, PlaybackDto, PlayRequest, SeekRequest, TvDto, VideoDto, YoutubeRequest
 
 
 def build_router(tvs: TvService, library: VideoLibrary, playback: PlaybackService) -> APIRouter:
@@ -49,6 +49,14 @@ def build_router(tvs: TvService, library: VideoLibrary, playback: PlaybackServic
     @router.post("/tvs/{tv_id}/resume", status_code=204)
     async def resume(tv_id: str) -> None:
         await playback.resume(tv_id)
+
+    @router.post("/tvs/{tv_id}/seek", status_code=204)
+    async def seek(tv_id: str, body: SeekRequest) -> None:
+        if body.position_s is not None:
+            await playback.seek(tv_id, body.position_s)
+        else:
+            assert body.offset_s is not None
+            await playback.seek(tv_id, body.offset_s, relative=True)
 
     @router.post("/tvs/{tv_id}/stop", status_code=204)
     async def stop(tv_id: str) -> None:

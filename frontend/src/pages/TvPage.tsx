@@ -2,8 +2,8 @@ import { api } from "../api";
 import { Icon } from "../components/Icons";
 import { Library } from "../components/Library";
 import { Notice } from "../components/Notice";
+import { PlaybackTimeline } from "../components/PlaybackTimeline";
 import { TvScreen } from "../components/TvScreen";
-import { formatTime } from "../format";
 import { STATE_LABEL, useRemote } from "../remote";
 import { R } from "../routes";
 import { Link, useRouter } from "../router";
@@ -50,17 +50,22 @@ export function TvPage({ tvId }: { tvId: string }) {
             </div>
           </TvScreen>
 
-          <div className="timeline" aria-hidden={!r.active}>
-            <div className="meter">
-              <span className="meter__fill" style={{ width: `${r.active ? r.percent : 0}%` }} />
-            </div>
-            <span className="timeline__time">
-              {r.active ? `${formatTime(r.position)} / ${formatTime(r.duration)}` : "–:–– / –:––"}
-            </span>
-          </div>
+          <PlaybackTimeline
+            position={r.position}
+            duration={r.duration}
+            enabled={r.canSeekTo}
+            busy={r.busy}
+            onSeek={r.seekTo}
+          />
 
           <div className="remote" role="group" aria-label="Управление воспроизведением">
-            <button className="round-btn" aria-label="Назад на 10 секунд" title={LATER} disabled>
+            <button
+              className="round-btn"
+              aria-label="Назад на 10 секунд"
+              title="Назад на 10 секунд"
+              onClick={() => r.seekBy(-10)}
+              disabled={r.busy || !r.canSeekBy}
+            >
               <Icon name="back10" />
             </button>
             {r.state === "paused" ? (
@@ -87,7 +92,13 @@ export function TvPage({ tvId }: { tvId: string }) {
             <button className="round-btn" onClick={r.stop} disabled={r.busy || !r.active} aria-label="Стоп" title="Стоп">
               <Icon name="stop" />
             </button>
-            <button className="round-btn" aria-label="Вперёд на 10 секунд" title={LATER} disabled>
+            <button
+              className="round-btn"
+              aria-label="Вперёд на 10 секунд"
+              title="Вперёд на 10 секунд"
+              onClick={() => r.seekBy(10)}
+              disabled={r.busy || !r.canSeekBy}
+            >
               <Icon name="fwd10" />
             </button>
             <button className="round-btn" aria-label="Следующее видео" title={LATER} disabled>

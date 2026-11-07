@@ -625,6 +625,18 @@ code {
   margin-top: 26px;
 }
 
+.timeline__seek {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.timeline__seek:disabled,
+.timeline__seek[aria-disabled="true"] { cursor: default; }
+
 .timeline__time {
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;

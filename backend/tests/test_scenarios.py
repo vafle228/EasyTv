@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from easytv.api.app import create_app
 from easytv.config import Settings
 from easytv.container import build_container
+from easytv.core.errors import TvCommandError
 from easytv.core.models import DownloadResult, MediaItem, PlaybackInfo, PlaybackState, Tv
 
 LIVING_ROOM = Tv(
@@ -60,12 +61,15 @@ class FakeLocator:
 
 class FakeController:
     def __init__(self) -> None:
-        self.commands: list[tuple[str, str, MediaItem | None]] = []
+        self.commands: list[tuple[str, str, MediaItem | int | None]] = []
         self.state = PlaybackState.STOPPED
+        self.position_s: int | None = None
+        self.reject_seek = False
 
     async def play(self, tv: Tv, media: MediaItem) -> None:
         self.commands.append(("play", tv.id, media))
         self.state = PlaybackState.PLAYING
+        self.position_s = 0
 
     async def pause(self, tv: Tv) -> None:
         self.commands.append(("pause", tv.id, None))
@@ -75,12 +79,20 @@ class FakeController:
         self.commands.append(("resume", tv.id, None))
         self.state = PlaybackState.PLAYING
 
+    async def seek(self, tv: Tv, position_s: int) -> None:
+        if self.reject_seek:
+            raise TvCommandError("Телевизор отклонил перемотку")
+        self.commands.append(("seek", tv.id, position_s))
+        self.position_s = position_s
+
     async def stop(self, tv: Tv) -> None:
         self.commands.append(("stop", tv.id, None))
         self.state = PlaybackState.STOPPED
 
     async def info(self, tv: Tv) -> PlaybackInfo:
-        return PlaybackInfo(state=self.state, position_s=12 if self.state is PlaybackState.PLAYING else None)
+        if self.state in (PlaybackState.PLAYING, PlaybackState.PAUSED):
+            return PlaybackInfo(state=self.state, position_s=self.position_s, duration_s=120)
+        return PlaybackInfo(state=self.state)
 
 
 class FakeDownloader:
@@ -172,6 +184,55 @@ def test_found_tv_plays_uploaded_file_and_streams_it(env):
     for cmd in ("pause", "resume", "stop"):
         assert client.post(f"/api/tvs/tv-living/{cmd}").status_code == 204
     assert [c[0] for c in controller.commands] == ["play", "pause", "resume", "stop"]
+
+
+def test_seek_uploaded_video_by_position_and_offset(env):
+    client, _, controller, _, _, _ = env
+    client.post("/api/tvs/refresh")
+    video = client.post("/api/videos/upload", files={"file": ("clip.mp4", b"video", "video/mp4")}).json()
+    base = "/api/tvs/tv-living"
+    assert client.post(f"{base}/play", json={"videoId": video["id"]}).status_code == 200
+
+    # Skip forward from zero, then choose an exact position.
+    assert client.post(f"{base}/seek", json={"offsetS": 10}).status_code == 204
+    assert controller.commands[-1] == ("seek", "tv-living", 10)
+    assert client.post(f"{base}/seek", json={"positionS": 117}).status_code == 204
+    assert controller.commands[-1] == ("seek", "tv-living", 117)
+    assert client.post(f"{base}/seek", json={"offsetS": 10}).status_code == 204
+    assert controller.commands[-1] == ("seek", "tv-living", 120)
+
+    # Seeking while paused keeps the same video and does not resume playback.
+    assert client.post(f"{base}/pause").status_code == 204
+    assert client.post(f"{base}/seek", json={"positionS": 5}).status_code == 204
+    response = client.post(f"{base}/seek", json={"offsetS": -10})
+    assert response.status_code == 204 and response.content == b""
+    assert controller.commands[-1] == ("seek", "tv-living", 0)
+    status = client.get(f"{base}/playback").json()
+    assert (status["state"], status["videoId"], status["positionS"]) == ("paused", video["id"], 0)
+
+
+@pytest.mark.parametrize("body", [{}, {"positionS": -1}, {"positionS": 1.5}, {"positionS": 3, "offsetS": 10}])
+def test_seek_rejects_invalid_target(env, body):
+    client, _, controller, _, _, _ = env
+    client.post("/api/tvs/refresh")
+    assert client.post("/api/tvs/tv-living/seek", json=body).status_code == 422
+    assert controller.commands == []
+
+
+def test_seek_reports_missing_position_and_tv_rejection(env):
+    client, _, controller, _, _, _ = env
+    client.post("/api/tvs/refresh")
+    seek = "/api/tvs/tv-living/seek"
+    assert client.post("/api/tvs/unknown/seek", json={"positionS": 5}).status_code == 404
+    assert client.post(seek, json={"positionS": 5}).status_code == 409
+    controller.state = PlaybackState.PLAYING
+    assert client.post(seek, json={"offsetS": 10}).status_code == 409
+
+    controller.reject_seek = True
+    response = client.post(seek, json={"positionS": 5})
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Телевизор отклонил перемотку"}
+    assert controller.commands == []
 
 
 def test_youtube_video_is_downloaded_then_played(env):

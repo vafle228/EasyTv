@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from easytv.core.models import (
@@ -117,6 +117,17 @@ class PlaybackDto(Dto):
 
 class PlayRequest(Dto):
     video_id: str
+
+
+class SeekRequest(Dto):
+    position_s: int | None = Field(default=None, ge=0, strict=True)
+    offset_s: int | None = Field(default=None, strict=True)
+
+    @model_validator(mode="after")
+    def check_target(self) -> SeekRequest:
+        if (self.position_s is None) == (self.offset_s is None):
+            raise ValueError("Укажите одну цель перемотки: positionS или offsetS")
+        return self
 
 
 class PlayStreamRequest(StreamRefDto):
