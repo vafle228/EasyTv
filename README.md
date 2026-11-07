@@ -4,7 +4,18 @@
 
 ## Запуск
 
-Нужен Docker Desktop. В Git Bash из папки проекта:
+Нужны Docker Desktop и Git for Windows. В cmd из папки проекта:
+
+```cmd
+run.cmd
+```
+
+В PowerShell: `./run.cmd` (либо `./run.ps1`, если разрешён запуск скриптов).
+Обёртки используют Git Bash и существующий `run.sh`, поэтому команды одинаковы:
+`run.cmd down`, `run.cmd logs`, `run.cmd discover`, `run.cmd rebuild`, `run.cmd test`, `run.cmd native`.
+ExecutionPolicy для запуска обёртки задаётся только дочернему процессу, системная настройка не меняется.
+
+В Git Bash, а также на Linux/macOS с установленным Docker:
 
 ```bash
 ./run.sh
@@ -77,6 +88,10 @@ scripts/           поиск телевизоров с компьютера д�
 - **Не скачивается с YouTube.** Обновите yt-dlp: `./run.sh rebuild`.
 
 ## Разработка
+
+Контекст проекта и правила работы агентов: [AGENTS.md](AGENTS.md).
+Задачи выбираем из [TASKS.md](TASKS.md).
+См. также [дизайн-систему](docs/design-system.md) и [контракт API](docs/api-contract.md).
 
 ```bash
 cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[test]'
