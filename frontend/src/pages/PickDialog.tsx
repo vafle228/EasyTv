@@ -35,8 +35,11 @@ export function PickDialog({
   const [choice, setChoice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queuedOn, setQueuedOn] = useState<string | null>(null);
 
   const selected = choice ?? tvs?.find((t) => t.online)?.id ?? HERE;
+  const hasMedia = !!(stream || videoId);
+  const selectedTv = tvs?.find((tv) => tv.id === selected);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -44,7 +47,7 @@ export function PickDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const show = async () => {
+  const show = async (enqueue: boolean) => {
     if (selected === HERE) {
       navigate(stream ? R.watchStream(stream.ref) : videoId ? R.watchOf(videoId) : R.watch);
       return;
@@ -56,11 +59,20 @@ export function PickDialog({
     setBusy(true);
     setError(null);
     try {
-      if (stream) await api.playStream(selected, stream.ref, stream.title, stream.translation);
-      else if (videoId) await api.play(selected, videoId);
+      if (enqueue) {
+        if (stream) await api.enqueue(selected, { stream: stream.ref, title: stream.title, translation: stream.translation });
+        else if (videoId) await api.enqueue(selected, { videoId });
+        setQueuedOn(selected);
+        return;
+      } else if (stream) {
+        await api.playStream(selected, stream.ref, stream.title, stream.translation);
+      } else if (videoId) {
+        await api.play(selected, videoId);
+      }
       navigate(R.tvOf(selected));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
       setBusy(false);
     }
   };
@@ -94,8 +106,11 @@ export function PickDialog({
                   className="pick"
                   role="radio"
                   aria-checked={selected === tv.id}
-                  disabled={!tv.online}
-                  onClick={() => setChoice(tv.id)}
+                  disabled={busy || (!tv.online && !hasMedia)}
+                  onClick={() => {
+                    setChoice(tv.id);
+                    setError(null);
+                  }}
                 >
                   <TvScreen on={tv.online} size="mini">
                     {tv.online ? (
@@ -108,7 +123,7 @@ export function PickDialog({
                     <span className="pick__name">{tv.name}</span>
                     <span className="pick__meta">
                       {!tv.online
-                        ? "Не в сети. Включите телевизор."
+                        ? (hasMedia ? "Не в сети. Можно добавить в очередь." : "Не в сети. Включите телевизор.")
                         : same
                           ? "В сети, сейчас показывает это же видео"
                           : isActive(p)
@@ -121,7 +136,7 @@ export function PickDialog({
             );
           })}
           <li>
-            <button className="pick" role="radio" aria-checked={selected === HERE} onClick={() => setChoice(HERE)}>
+            <button className="pick" role="radio" aria-checked={selected === HERE} disabled={busy} onClick={() => setChoice(HERE)}>
               <span className="pick__icon">
                 <Icon name="phone" />
               </span>
@@ -143,9 +158,24 @@ export function PickDialog({
             <button className="btn btn--small" onClick={onClose}>
               Отмена
             </button>
-            <button className="btn btn--primary btn--small" onClick={show} disabled={busy}>
+            {hasMedia && selectedTv && (
+              <button
+                className="btn btn--small queue-action"
+                onClick={() => void show(true)}
+                disabled={busy || queuedOn === selected}
+                aria-live="polite"
+              >
+                <Icon name="queue" />
+                {queuedOn === selected ? "Добавлено" : "В очередь"}
+              </button>
+            )}
+            <button
+              className="btn btn--primary btn--small"
+              onClick={() => void show(false)}
+              disabled={busy || (selected !== HERE && !selectedTv?.online)}
+            >
               <Icon name="play" />
-              {busy ? (stream ? "Ищу видео…" : "Запускаю…") : "Показать"}
+              {busy ? "Подождите…" : "Показать"}
             </button>
           </div>
         </div>

@@ -75,10 +75,7 @@ def build_router(
 
     @router.post("/tvs/{tv_id}/play-stream", response_model=PlaybackDto)
     async def play_stream(tv_id: str, body: PlayStreamRequest) -> PlaybackDto:
-        ref = body.ref()
-        status = await playback.play_stream(tv_id, ref, body.title)
-        cinema.started(ref, body.translation)
-        return PlaybackDto.of(status)
+        return PlaybackDto.of(await playback.play_stream(tv_id, body.ref(), body.title, body.translation))
 
     # ---- Cinema: titles kept from sites
 

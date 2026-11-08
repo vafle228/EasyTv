@@ -16,6 +16,7 @@ from easytv.core.errors import (
     CatalogItemNotFound,
     EasyTvError,
     PlaybackNotSeekable,
+    QueueChanged,
     StreamUnavailable,
     TitleNotSaved,
     InvalidVideoUrl,
@@ -37,6 +38,7 @@ _ERROR_STATUS: dict[type[EasyTvError], int] = {
     VideoNotFound: 404,
     VideoNotReady: 409,
     PlaybackNotSeekable: 409,
+    QueueChanged: 409,
     InvalidVideoUrl: 422,
     UnsupportedVideoFormat: 415,
     TvCommandError: 502,
@@ -60,12 +62,15 @@ async def _discovery_loop(c: Container) -> None:
 def create_app(c: Container, stream_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        task = asyncio.create_task(_discovery_loop(c)) if c.settings.discovery_interval_s > 0 else None
+        tasks = [asyncio.create_task(c.playback.watch_queues())]
+        if c.settings.discovery_interval_s > 0:
+            tasks.append(asyncio.create_task(_discovery_loop(c)))
         try:
             yield
         finally:
-            if task:
+            for task in tasks:
                 task.cancel()
+            for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
 

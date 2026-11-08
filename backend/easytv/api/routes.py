@@ -6,7 +6,20 @@ from fastapi import APIRouter, UploadFile
 
 from easytv.core.services import PlaybackService, TvService, VideoLibrary
 
-from .schemas import AddTvRequest, DirectVideoRequest, PlaybackDto, PlayRequest, SeekRequest, TvDto, VideoDto, YoutubeRequest
+from .schemas import (
+    AddTvRequest,
+    DirectVideoRequest,
+    NextRequest,
+    PlaybackDto,
+    PlayRequest,
+    QueueDto,
+    QueueItemDto,
+    QueueRequest,
+    SeekRequest,
+    TvDto,
+    VideoDto,
+    YoutubeRequest,
+)
 
 
 def build_router(tvs: TvService, library: VideoLibrary, playback: PlaybackService) -> APIRouter:
@@ -61,6 +74,28 @@ def build_router(tvs: TvService, library: VideoLibrary, playback: PlaybackServic
     @router.post("/tvs/{tv_id}/stop", status_code=204)
     async def stop(tv_id: str) -> None:
         await playback.stop(tv_id)
+
+    @router.get("/tvs/{tv_id}/queue", response_model=QueueDto)
+    async def list_queue(tv_id: str) -> QueueDto:
+        items, error = playback.queue(tv_id)
+        return QueueDto(items=[QueueItemDto.of(item) for item in items], error=error)
+
+    @router.post("/tvs/{tv_id}/queue", status_code=204)
+    async def enqueue(tv_id: str, body: QueueRequest) -> None:
+        if body.stream is not None:
+            assert body.title is not None
+            await playback.enqueue_stream(tv_id, body.stream.ref(), body.title, body.translation)
+        else:
+            assert body.video_id is not None
+            await playback.enqueue_video(tv_id, body.video_id)
+
+    @router.delete("/tvs/{tv_id}/queue/{item_id}", status_code=204)
+    async def remove_queued(tv_id: str, item_id: str) -> None:
+        await playback.remove_queued(tv_id, item_id)
+
+    @router.post("/tvs/{tv_id}/next", response_model=PlaybackDto)
+    async def play_next(tv_id: str, body: NextRequest) -> PlaybackDto:
+        return PlaybackDto.of(await playback.next(tv_id, body.item_id))
 
     # ---- Video library
 

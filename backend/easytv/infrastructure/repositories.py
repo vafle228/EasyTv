@@ -7,7 +7,7 @@ from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 
-from easytv.core.models import SavedTitle, TitleKind, Tv, Video, VideoSource, VideoStatus
+from easytv.core.models import QueueItem, SavedTitle, StreamRef, TitleKind, Tv, Video, VideoSource, VideoStatus
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +139,44 @@ class JsonVideoRepository:
             tmp = self._path.with_suffix(".tmp")
             tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             tmp.replace(self._path)
+
+
+class JsonPlaybackQueueRepository:
+    """Waiting items per TV. All access is serialized by the server event loop."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._queues: dict[str, tuple[QueueItem, ...]] = {}
+        if path.exists():
+            try:
+                for tv_id, items in json.loads(path.read_text(encoding="utf-8")).items():
+                    self._queues[tv_id] = tuple(
+                        QueueItem(
+                            id=item["id"],
+                            title=item["title"],
+                            video_id=item["video_id"],
+                            stream=StreamRef(**item["stream"]) if item["stream"] else None,
+                            translation=item["translation"],
+                        )
+                        for item in items
+                    )
+            except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+                log.warning("Cannot read %s: %s", path, exc)
+
+    def get(self, tv_id: str) -> tuple[QueueItem, ...]:
+        return self._queues.get(tv_id, ())
+
+    def save(self, tv_id: str, items: tuple[QueueItem, ...]) -> None:
+        queues = self._queues.copy()
+        if items:
+            queues[tv_id] = items
+        else:
+            queues.pop(tv_id, None)
+        data = {key: [asdict(item) for item in queue] for key, queue in queues.items()}
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(self._path)
+        self._queues = queues
 
 
 class JsonSavedTitleRepository:

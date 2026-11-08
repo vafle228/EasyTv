@@ -760,6 +760,25 @@ code {
   gap: 14px;
 }
 
+.btn.queue-action {
+  min-height: 44px;
+}
+
+.queue-items {
+  margin-top: 12px;
+}
+
+.queue-items .queue-item {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.queue-item .icon-btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
 .videos__empty {
   padding: 22px;
   border-radius: var(--r-inner);

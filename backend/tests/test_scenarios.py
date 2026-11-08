@@ -69,9 +69,15 @@ class FakeController:
         self.state = PlaybackState.STOPPED
         self.position_s: int | None = None
         self.reject_seek = False
+        self.reject_play = False
+        self.track_uri: str | None = None
+        self.position_sampled = Event()
 
     async def play(self, tv: Tv, media: MediaItem) -> None:
+        if self.reject_play:
+            raise TvCommandError("Телевизор отклонил воспроизведение")
         self.commands.append(("play", tv.id, media))
+        self.track_uri = media.url
         self.state = PlaybackState.PLAYING
         self.position_s = 0
 
@@ -95,7 +101,9 @@ class FakeController:
 
     async def info(self, tv: Tv) -> PlaybackInfo:
         if self.state in (PlaybackState.PLAYING, PlaybackState.PAUSED):
-            return PlaybackInfo(state=self.state, position_s=self.position_s, duration_s=120)
+            info = PlaybackInfo(state=self.state, position_s=self.position_s, duration_s=120, track_uri=self.track_uri)
+            self.position_sampled.set()
+            return info
         return PlaybackInfo(state=self.state)
 
 

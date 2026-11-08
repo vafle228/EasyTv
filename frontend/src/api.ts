@@ -3,6 +3,7 @@ import type {
   Collection,
   Episode,
   Playback,
+  PlaybackQueue,
   Resolved,
   SavedTitle,
   StreamRef,
@@ -68,6 +69,13 @@ export const api = {
   seek: (id: string, target: { positionS: number } | { offsetS: number }) =>
     request<void>(`${tvPath(id)}/seek`, post(target)),
   stop: (id: string) => request<void>(`${tvPath(id)}/stop`, { method: "POST" }),
+
+  queue: (id: string) => request<PlaybackQueue>(`${tvPath(id)}/queue`),
+  enqueue: (id: string, item: { videoId: string } | { stream: StreamRef; title: string; translation: string | null }) =>
+    request<void>(`${tvPath(id)}/queue`, post(item)),
+  removeQueued: (id: string, itemId: string) =>
+    request<void>(`${tvPath(id)}/queue/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
+  next: (id: string, itemId: string) => request<Playback>(`${tvPath(id)}/next`, post({ itemId })),
 
   playStream: (id: string, ref: StreamRef, title: string, translation: string | null) =>
     request<Playback>(`${tvPath(id)}/play-stream`, post({ ...ref, title, translation })),

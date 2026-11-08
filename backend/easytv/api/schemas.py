@@ -11,6 +11,7 @@ from easytv.core.models import (
     Episode,
     PlaybackState,
     PlaybackStatus,
+    QueueItem,
     SavedTitle,
     Stream,
     StreamRef,
@@ -117,6 +118,46 @@ class PlaybackDto(Dto):
 
 class PlayRequest(Dto):
     video_id: str
+
+
+class QueueRequest(Dto):
+    video_id: str | None = Field(default=None, min_length=1)
+    stream: StreamRefDto | None = None
+    title: str | None = Field(default=None, min_length=1)
+    translation: str | None = None
+
+    @model_validator(mode="after")
+    def check_source(self) -> QueueRequest:
+        if self.stream is not None and self.title and self.video_id is None:
+            return self
+        if self.video_id is not None and self.stream is None and self.title is None and self.translation is None:
+            return self
+        raise ValueError("Укажите videoId или stream с названием видео")
+
+
+class NextRequest(Dto):
+    item_id: str = Field(min_length=1)
+
+
+class QueueItemDto(Dto):
+    id: str
+    title: str
+    video_id: str | None
+    stream: StreamRefDto | None
+
+    @classmethod
+    def of(cls, item: QueueItem) -> QueueItemDto:
+        return cls(
+            id=item.id,
+            title=item.title,
+            video_id=item.video_id,
+            stream=StreamRefDto.of(item.stream) if item.stream else None,
+        )
+
+
+class QueueDto(Dto):
+    items: list[QueueItemDto]
+    error: str | None
 
 
 class SeekRequest(Dto):

@@ -7,16 +7,19 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import AsyncIterator, Coroutine
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from pathlib import Path
+from time import monotonic
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from .errors import (
+    EasyTvError,
     InvalidDirectVideoUrl,
     InvalidVideoUrl,
     PlaybackNotSeekable,
+    QueueChanged,
     TvNotFound,
     TvNotReachable,
     UnsupportedVideoFormat,
@@ -28,6 +31,7 @@ from .models import (
     MediaItem,
     PlaybackState,
     PlaybackStatus,
+    QueueItem,
     Stream,
     StreamRef,
     Tv,
@@ -41,6 +45,7 @@ from .ports import (
     FileFetcher,
     IdGenerator,
     MediaUrlResolver,
+    PlaybackQueueRepository,
     TvController,
     TvDiscovery,
     TvLocator,
@@ -51,7 +56,7 @@ from .ports import (
 )
 
 if TYPE_CHECKING:
-    from .catalog import CatalogService
+    from .catalog import CatalogService, CinemaService
 
 log = logging.getLogger(__name__)
 
@@ -330,6 +335,20 @@ class VideoLibrary:
         self._repo.update(video)
 
 
+_IDLE_STATES = (PlaybackState.STOPPED, PlaybackState.NO_MEDIA)
+_END_MARGIN_S = 3
+_END_SAMPLE_MAX_AGE_S = 8
+_PLAY_START_GRACE_S = 8
+
+
+@dataclass
+class _Playing:
+    status: PlaybackStatus
+    uri: str
+    started_at: float
+    near_end_at: float | None = None
+
+
 class PlaybackService:
     def __init__(
         self,
@@ -337,44 +356,181 @@ class PlaybackService:
         videos: VideoLibrary,
         controller: TvController,
         urls: MediaUrlResolver,
-        catalog: CatalogService | None = None,
+        catalog: CatalogService,
+        cinema: CinemaService,
+        queues: PlaybackQueueRepository,
+        ids: IdGenerator,
     ) -> None:
         self._tvs = tvs
         self._videos = videos
         self._controller = controller
         self._urls = urls
         self._catalog = catalog
+        self._cinema = cinema
+        self._queues = queues
+        self._ids = ids
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._now_playing: dict[str, str] = {}
-        self._streams: dict[str, tuple[StreamRef, str]] = {}
+        self._playing: dict[str, _Playing] = {}
+        self._queue_errors: dict[str, str] = {}
 
     async def play(self, tv_id: str, video_id: str) -> PlaybackStatus:
-        tv = self._tvs.get(tv_id).tv
+        async with self._locks[tv_id]:
+            tv = self._tvs.get(tv_id).tv
+            return await self._play_video(tv, video_id)
+
+    async def play_stream(
+        self, tv_id: str, ref: StreamRef, title: str, translation: str | None = None
+    ) -> PlaybackStatus:
+        async with self._locks[tv_id]:
+            tv = self._tvs.get(tv_id).tv
+            status = await self._play_stream(tv, ref, title)
+            self._cinema.started(ref, translation)
+            return status
+
+    def _ready_video(self, video_id: str) -> Video:
         video = self._videos.get(video_id)
         if video.status is not VideoStatus.READY or video.path is None:
             raise VideoNotReady(video_id)
-        media = MediaItem(url=self._urls.url_for(video, tv), title=video.title, mime=video.mime)
-        async with self._locks[tv_id]:
-            await self._controller.play(tv, media)
-            self._now_playing[tv_id] = video_id
-            self._streams.pop(tv_id, None)
-        return PlaybackStatus(state=PlaybackState.TRANSITIONING, video_id=video_id)
+        return video
 
-    async def play_stream(self, tv_id: str, ref: StreamRef, title: str) -> PlaybackStatus:
-        """Show an episode from a site: the TV gets a link to our proxy, which fetches a fresh CDN link."""
-        assert self._catalog is not None
-        tv = self._tvs.get(tv_id).tv
-        await self._catalog.resolve(ref)  # fail here, with a readable error, rather than on the TV
+    async def _play_video(self, tv: Tv, video_id: str) -> PlaybackStatus:
+        video = self._ready_video(video_id)
+        media = MediaItem(url=self._urls.url_for(video, tv), title=video.title, mime=video.mime)
+        return await self._start(tv, media, PlaybackStatus(state=PlaybackState.TRANSITIONING, video_id=video_id))
+
+    async def _play_stream(self, tv: Tv, ref: StreamRef, title: str) -> PlaybackStatus:
+        # Resolve at playback time since the CDN link can expire while the episode waits in the queue.
+        await self._catalog.resolve(ref)
         media = MediaItem(url=self._urls.url_for_path(ref.path, tv), title=title, mime="video/mp4")
+        status = PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref)
+        return await self._start(tv, media, status)
+
+    async def _start(self, tv: Tv, media: MediaItem, status: PlaybackStatus) -> PlaybackStatus:
+        # A failed AVTransport play can still have replaced or stopped the old media.
+        self._reset_end_sample(tv.id)
+        await self._controller.play(tv, media)
+        self._playing[tv.id] = _Playing(status=status, uri=media.url, started_at=monotonic())
+        return status
+
+    def queue(self, tv_id: str) -> tuple[tuple[QueueItem, ...], str | None]:
+        self._tvs.get(tv_id)
+        return self._queues.get(tv_id), self._queue_errors.get(tv_id)
+
+    async def enqueue_video(self, tv_id: str, video_id: str) -> None:
         async with self._locks[tv_id]:
-            await self._controller.play(tv, media)
-            self._now_playing.pop(tv_id, None)
-            self._streams[tv_id] = (ref, title)
-        return PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref)
+            self._tvs.get(tv_id)
+            video = self._ready_video(video_id)
+            self._enqueue(tv_id, QueueItem(id=self._ids.new_id(), title=video.title, video_id=video_id))
+
+    async def enqueue_stream(self, tv_id: str, ref: StreamRef, title: str, translation: str | None) -> None:
+        async with self._locks[tv_id]:
+            self._tvs.get(tv_id)
+            self._enqueue(tv_id, QueueItem(id=self._ids.new_id(), title=title, stream=ref, translation=translation))
+
+    def _enqueue(self, tv_id: str, item: QueueItem) -> None:
+        items = self._queues.get(tv_id)
+        if any((queued.video_id, queued.stream) == (item.video_id, item.stream) for queued in items):
+            return
+        self._queues.save(tv_id, (*items, item))
+
+    async def remove_queued(self, tv_id: str, item_id: str) -> None:
+        async with self._locks[tv_id]:
+            self._tvs.get(tv_id)
+            items = self._queues.get(tv_id)
+            remaining = tuple(item for item in items if item.id != item_id)
+            if remaining == items:
+                return
+            self._queues.save(tv_id, remaining)
+            if items[0].id == item_id:
+                self._queue_errors.pop(tv_id, None)
+
+    async def next(self, tv_id: str, item_id: str) -> PlaybackStatus:
+        async with self._locks[tv_id]:
+            tv = self._tvs.get(tv_id).tv
+            items = self._queues.get(tv_id)
+            if not items or items[0].id != item_id:
+                raise QueueChanged()
+            return await self._play_next(tv, items)
+
+    async def _play_next(self, tv: Tv, items: tuple[QueueItem, ...]) -> PlaybackStatus:
+        item = items[0]
+        if item.stream is not None:
+            status = await self._play_stream(tv, item.stream, item.title)
+        else:
+            assert item.video_id is not None
+            status = await self._play_video(tv, item.video_id)
+        self._queues.save(tv.id, items[1:])
+        self._queue_errors.pop(tv.id, None)
+        if item.stream is not None:
+            self._cinema.started(item.stream, item.translation)
+        return status
+
+    def _reset_end_sample(self, tv_id: str) -> None:
+        playing = self._playing.get(tv_id)
+        if playing:
+            playing.near_end_at = None
+
+    async def watch_queues(self) -> None:
+        """Advance active queues independently of browser polling and of other TVs."""
+        pending: dict[str, asyncio.Task[None]] = {}
+        async with asyncio.TaskGroup() as group:
+            while True:
+                pending = {tv_id: task for tv_id, task in pending.items() if not task.done()}
+                for view in self._tvs.list():
+                    tv_id = view.tv.id
+                    if (
+                        view.online and tv_id in self._playing and tv_id not in pending
+                        and tv_id not in self._queue_errors and self._queues.get(tv_id)
+                    ):
+                        pending[tv_id] = group.create_task(self._check_queue(view.tv))
+                await asyncio.sleep(1)
+
+    async def _check_queue(self, tv: Tv) -> None:
+        async with self._locks[tv.id]:
+            playing = self._playing.get(tv.id)
+            items = self._queues.get(tv.id)
+            if not playing or not items or tv.id in self._queue_errors:
+                return
+            try:
+                await self._advance_if_finished(tv, playing, items)
+            except EasyTvError as exc:
+                self._queue_errors[tv.id] = str(exc)
+            except Exception:
+                log.exception("Failed to advance the playback queue on %s", tv.id)
+                self._queue_errors[tv.id] = "Не удалось запустить следующее видео"
+
+    async def _advance_if_finished(self, tv: Tv, playing: _Playing, items: tuple[QueueItem, ...]) -> None:
+        info = await self._controller.info(tv)
+        now = monotonic()
+        if info.state in _IDLE_STATES:
+            near_end = playing.near_end_at
+            if near_end is not None and now - near_end <= _END_SAMPLE_MAX_AGE_S:
+                self._playing.pop(tv.id)
+                await self._play_next(tv, items)
+            elif now - playing.started_at > _PLAY_START_GRACE_S:
+                self._playing.pop(tv.id)
+            return
+
+        if info.track_uri and info.track_uri != playing.uri:
+            self._playing.pop(tv.id)
+            return
+
+        if info.state is PlaybackState.TRANSITIONING:
+            return
+
+        # STOPPED alone could be the TV remote, a failure or an app switch.
+        position, duration = info.position_s, info.duration_s
+        at_end = (
+            info.state is PlaybackState.PLAYING and info.track_uri == playing.uri
+            and position is not None and duration is not None and 0 < position <= duration
+            and duration - position <= _END_MARGIN_S
+        )
+        playing.near_end_at = now if at_end else None
 
     async def pause(self, tv_id: str) -> None:
         tv = self._tvs.get(tv_id).tv
         async with self._locks[tv_id]:
+            self._reset_end_sample(tv_id)
             await self._controller.pause(tv)
 
     async def resume(self, tv_id: str) -> None:
@@ -396,27 +552,23 @@ class PlaybackService:
             target = max(0, target)
             if info.duration_s is not None:
                 target = min(target, info.duration_s)
+            self._reset_end_sample(tv_id)
             await self._controller.seek(tv, target)
 
     async def stop(self, tv_id: str) -> None:
         tv = self._tvs.get(tv_id).tv
         async with self._locks[tv_id]:
+            self._reset_end_sample(tv_id)
             await self._controller.stop(tv)
-            self._now_playing.pop(tv_id, None)
-            self._streams.pop(tv_id, None)
+            self._playing.pop(tv_id, None)
 
     async def status(self, tv_id: str) -> PlaybackStatus:
         tv = self._tvs.get(tv_id).tv
         info = await self._controller.info(tv)
-        video_id = self._now_playing.get(tv_id)
-        stream = self._streams.get(tv_id)
-        if info.state in (PlaybackState.STOPPED, PlaybackState.NO_MEDIA):
-            video_id, stream = None, None
-        return PlaybackStatus(
-            state=info.state,
-            video_id=video_id,
-            position_s=info.position_s,
-            duration_s=info.duration_s,
-            title=stream[1] if stream else None,
-            stream=stream[0] if stream else None,
+        playing = self._playing.get(tv_id)
+        status = (
+            playing.status
+            if playing and info.state not in _IDLE_STATES and info.track_uri in (None, playing.uri)
+            else PlaybackStatus(state=info.state)
         )
+        return replace(status, state=info.state, position_s=info.position_s, duration_s=info.duration_s)

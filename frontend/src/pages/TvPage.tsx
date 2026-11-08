@@ -2,6 +2,7 @@ import { api } from "../api";
 import { Icon } from "../components/Icons";
 import { Library } from "../components/Library";
 import { Notice } from "../components/Notice";
+import { PlaybackQueue } from "../components/PlaybackQueue";
 import { PlaybackTimeline } from "../components/PlaybackTimeline";
 import { TvScreen } from "../components/TvScreen";
 import { STATE_LABEL, useRemote } from "../remote";
@@ -101,7 +102,13 @@ export function TvPage({ tvId }: { tvId: string }) {
             >
               <Icon name="fwd10" />
             </button>
-            <button className="round-btn" aria-label="Следующее видео" title={LATER} disabled>
+            <button
+              className="round-btn"
+              aria-label="Следующее видео"
+              title="Следующее видео"
+              onClick={r.playNext}
+              disabled={r.busy || !r.canPlayNext}
+            >
               <Icon name="next" />
             </button>
           </div>
@@ -152,15 +159,7 @@ export function TvPage({ tvId }: { tvId: string }) {
             </button>
           </section>
 
-          <section className="card">
-            <div className="section-head" style={{ marginBottom: 14 }}>
-              <h2 className="label">Дальше</h2>
-            </div>
-            <p className="small muted">
-              Очередь появится в следующей версии: можно будет добавить сюда несколько видео, и следующая серия
-              включится сама.
-            </p>
-          </section>
+          <PlaybackQueue queue={r.queue.data} error={r.queue.error} busy={r.busy} onRemove={r.removeQueued} />
         </div>
       </div>
 
@@ -171,6 +170,9 @@ export function TvPage({ tvId }: { tvId: string }) {
         playingId={r.active ? (r.current?.id ?? null) : null}
         canPlay={online}
         onPlay={r.play}
+        queuedIds={new Set(r.queue.data?.items.flatMap((item) => item.videoId ? [item.videoId] : []))}
+        queueBusy={r.busy}
+        onQueue={r.enqueue}
         onChanged={() => {
           r.setError(null);
           void r.videos.reload();

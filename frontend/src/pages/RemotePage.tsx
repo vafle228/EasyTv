@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { TabBar } from "../components/AppBar";
 import { Icon } from "../components/Icons";
+import { PlaybackQueue } from "../components/PlaybackQueue";
 import { PlaybackTimeline } from "../components/PlaybackTimeline";
 import { TvScreen } from "../components/TvScreen";
 import { useNowPlaying } from "../nowPlaying";
@@ -106,7 +107,13 @@ function Remote({ tvId }: { tvId: string }) {
           <button className="round-btn" aria-label="Стоп" onClick={r.stop} disabled={r.busy || !r.active}>
             <Icon name="stop" />
           </button>
-          <button className="round-btn" aria-label="Следующее видео" title={LATER} disabled>
+          <button
+            className="round-btn"
+            aria-label="Следующее видео"
+            title="Следующее видео"
+            onClick={r.playNext}
+            disabled={r.busy || !r.canPlayNext}
+          >
             <Icon name="next" />
           </button>
         </div>
@@ -118,6 +125,7 @@ function Remote({ tvId }: { tvId: string }) {
           <span className="timeline__time">–</span>
         </div>
         {r.error && <p className="video__error">{r.error}</p>}
+        <PlaybackQueue queue={r.queue.data} error={r.queue.error} busy={r.busy} onRemove={r.removeQueued} />
         <Link className="btn btn--block" to={R.tvOf(tvId)}>
           <Icon name="list" />
           Библиотека и настройки
