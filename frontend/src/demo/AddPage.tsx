@@ -6,7 +6,6 @@ import { R } from "../routes";
 import { Notice } from "../components/Notice";
 import { Link, useRouter } from "../router";
 
-/** The single "Добавить" field (YouTube works) and, below it, the mockup's examples of what else it will recognise. */
 export function AddPage() {
   const ref = useDemoControls<HTMLElement>();
   const { navigate } = useRouter();
@@ -23,11 +22,11 @@ export function AddPage() {
           />
         </div>
         <p className="small muted" style={{ marginTop: "14px" }}>
-          Сейчас скачиваются ролики с YouTube. Файл с компьютера можно загрузить на <Link to={R.tv}>странице телевизора</Link>.
+          Сюда можно вставить ссылку на YouTube или напрямую на видеофайл. Файл с компьютера можно загрузить на <Link to={R.tv}>странице телевизора</Link>.
         </p>
       </section>
 
-      {problem && <Notice title="Пока не умею" text={problem} onClose={() => setProblem(null)} />}
+      {problem && <Notice title="Не получилось добавить" text={problem} onClose={() => setProblem(null)} />}
 
       <DemoNote>Ниже пример подсказок из макетов: торренты, эфир и animego появятся позже.</DemoNote>
       <section className="card">

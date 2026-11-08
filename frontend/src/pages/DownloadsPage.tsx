@@ -9,7 +9,6 @@ import { R } from "../routes";
 import { Link } from "../router";
 import type { Video } from "../types";
 
-/** Downloads: YouTube and site episodes are real (the library's pending/downloading/failed items); torrents are a sample. */
 export function DownloadsPage() {
   const { videos, reload } = useNowPlaying();
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +33,7 @@ export function DownloadsPage() {
         <div className="card__head">
           <div>
             <h1 className="label">Загрузки</h1>
-            <p className="muted">Торренты, YouTube и сайты в одном месте. Готовое само попадает в библиотеку.</p>
+            <p className="muted">Скачанные видео с YouTube, из каталогов и по прямым ссылкам попадают в библиотеку.</p>
           </div>
           <Link className="btn" to={R.add}>
             <Icon name="plus" />
@@ -69,12 +68,12 @@ export function DownloadsPage() {
         </div>
         <ul className="videos">
           {videos !== null && active.length + failed.length === 0 && (
-            <li className="videos__empty muted">Ничего не скачивается. Вставьте ссылку на YouTube в поле «Добавить» или скачайте серию со страницы тайтла в «Каталогах».</li>
+            <li className="videos__empty muted">Ничего не скачивается. Вставьте ссылку в поле «Добавить» или скачайте серию из каталога.</li>
           )}
           {[...active, ...failed].map((v) => (
             <li key={v.id} className="video">
-              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : "youtube"}`}>
-                <Icon name={v.source === "animego" ? "globe" : "youtube"} />
+              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : v.source}`}>
+                <Icon name={v.source === "youtube" ? "youtube" : v.source === "animego" ? "globe" : "file"} />
               </span>
               <div className="video__main">
                 <span className="video__title" title={v.title}>
@@ -110,8 +109,8 @@ export function DownloadsPage() {
           {videos !== null && done.length === 0 && <li className="videos__empty muted">Пока ничего не скачано.</li>}
           {done.slice(0, 10).map((v) => (
             <li key={v.id} className="video">
-              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : "youtube"}`}>
-                <Icon name={v.source === "animego" ? "globe" : "youtube"} />
+              <span className={`video__badge video__badge--${v.source === "animego" ? "site" : v.source}`}>
+                <Icon name={v.source === "youtube" ? "youtube" : v.source === "animego" ? "globe" : "file"} />
               </span>
               <div className="video__main">
                 <span className="video__title" title={v.title}>

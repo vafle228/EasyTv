@@ -8,7 +8,7 @@ export interface Tv {
   lastSeen: string | null;
 }
 
-export type VideoSource = "upload" | "youtube" | "animego";
+export type VideoSource = "upload" | "youtube" | "animego" | "direct";
 export type VideoStatus = "pending" | "downloading" | "ready" | "failed";
 
 export interface Video {
