@@ -35,6 +35,11 @@ export interface Playback {
   stream: StreamRef | null;
 }
 
+export interface PlaybackQueue {
+  items: { id: string; title: string; videoId: string | null; stream: StreamRef | null }[];
+  error: string | null;
+}
+
 /** An episode on a site: title, episode number (0 for a movie), dub and player ("auto" picks the best). */
 export interface StreamRef {
   titleId: string;

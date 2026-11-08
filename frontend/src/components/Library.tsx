@@ -11,6 +11,9 @@ interface Props {
   playingId: string | null;
   canPlay: boolean;
   onPlay: (video: Video) => Promise<void>;
+  queuedIds: ReadonlySet<string>;
+  queueBusy: boolean;
+  onQueue: (video: Video) => Promise<void>;
   onChanged: () => void;
   onError: (message: string) => void;
 }
@@ -30,7 +33,9 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "live", label: "Эфир" },
 ];
 
-export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError }: Props) {
+export function Library({
+  videos, playingId, canPlay, onPlay, queuedIds, queueBusy, onQueue, onChanged, onError,
+}: Props) {
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const [dragging, setDragging] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
@@ -203,11 +208,22 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
                   <button
                     className="btn btn--primary btn--small"
                     onClick={() => play(v)}
-                    disabled={!canPlay || starting !== null}
+                    disabled={!canPlay || queueBusy || starting !== null}
                     title={canPlay ? undefined : "Телевизор не в сети"}
                   >
                     <Icon name="play" />
                     {starting === v.id ? "Запускаю…" : current ? "Сначала" : "Показать"}
+                  </button>
+                )}
+                {v.status === "ready" && (
+                  <button
+                    className="btn btn--small queue-action"
+                    onClick={() => void onQueue(v)}
+                    disabled={queueBusy || queuedIds.has(v.id)}
+                    aria-label={queuedIds.has(v.id) ? `${v.title} уже в очереди` : `Добавить ${v.title} в очередь`}
+                  >
+                    <Icon name="queue" />
+                    {queuedIds.has(v.id) ? "В очереди" : "В очередь"}
                   </button>
                 )}
                 {loading ? (
