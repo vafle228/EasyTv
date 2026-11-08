@@ -14,6 +14,7 @@ from .models import (
     Episode,
     MediaItem,
     PlaybackInfo,
+    QueueItem,
     SavedTitle,
     Stream,
     StreamRef,
@@ -81,6 +82,11 @@ class VideoRepository(Protocol):
     def get(self, video_id: str) -> Video | None: ...
     def list(self) -> list[Video]: ...
     def delete(self, video_id: str) -> None: ...
+
+
+class PlaybackQueueRepository(Protocol):
+    def get(self, tv_id: str) -> tuple[QueueItem, ...]: ...
+    def save(self, tv_id: str, items: tuple[QueueItem, ...]) -> None: ...
 
 
 class CatalogSource(Protocol):

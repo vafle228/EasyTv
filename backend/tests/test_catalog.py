@@ -156,6 +156,27 @@ def test_find_save_and_watch_on_tv(env):
     assert (saved["lastEpisode"], saved["translation"], saved["watched"]) == (2, "Dream Cast", [2])
 
 
+def test_queued_episode_resolves_and_updates_cinema_only_on_play(env):
+    client, site, _, controller = env
+    tv = "/api/tvs/tv-living"
+    ref = {"titleId": FRIREN, "episode": 2, "translationId": "81"}
+    assert client.post("/api/cinema", json={"titleId": FRIREN}).status_code == 201
+    body = {"stream": ref, "title": "Фрирен, 2 серия", "translation": "Dream Cast"}
+    assert client.post(f"{tv}/queue", json=body).status_code == 204
+    items = client.get(f"{tv}/queue").json()["items"]
+    assert items[0]["stream"]["episode"] == 2
+    assert not site.resolved and not controller.commands
+    assert client.get("/api/cinema").json()[0]["watched"] == []
+
+    played = client.post(f"{tv}/next", json={"itemId": items[0]["id"]})
+    assert played.status_code == 200 and played.json()["stream"]["episode"] == 2
+    assert len(site.resolved) == 1
+    assert controller.commands[-1][2].url.endswith(f"/{FRIREN}/2/81/auto.mp4")
+    assert client.get(f"{tv}/queue").json()["items"] == []
+    saved = client.get("/api/cinema").json()[0]
+    assert saved["watched"] == [2] and saved["translation"] == "Dream Cast"
+
+
 def test_watch_in_browser_and_expired_link_is_refreshed(env):
     client, site, cdn, _ = env
     ready = client.post("/api/catalog/resolve", json={"titleId": FRIREN, "episode": 1, "translationId": "81"}).json()

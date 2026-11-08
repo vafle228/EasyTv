@@ -87,6 +87,7 @@ class PlaybackInfo:
     state: PlaybackState
     position_s: int | None = None
     duration_s: int | None = None
+    track_uri: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,15 @@ class PlaybackStatus:
     # What is on screen when it isn't a library video (an episode streamed from a site).
     title: str | None = None
     stream: StreamRef | None = None
+
+
+@dataclass(frozen=True)
+class QueueItem:
+    id: str
+    title: str
+    video_id: str | None = None
+    stream: StreamRef | None = None
+    translation: str | None = None
 
 
 # ---- Site catalogs (animego and the like)

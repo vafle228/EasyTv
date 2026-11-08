@@ -44,6 +44,11 @@ class PlaybackNotSeekable(EasyTvError):
     """The current playback state does not allow seeking."""
 
 
+class QueueChanged(EasyTvError):
+    def __init__(self) -> None:
+        super().__init__("Очередь изменилась. Проверьте, какое видео теперь следующее")
+
+
 class TvCommandError(EasyTvError):
     """The TV rejected a command or did not respond."""
 

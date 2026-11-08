@@ -19,7 +19,11 @@ def test_tv_seek_uses_track_time_and_reads_zero_position(monkeypatch):
         if action == "GetTransportInfo":
             return httpx.Response(200, text="<CurrentTransportState>PAUSED_PLAYBACK</CurrentTransportState>")
         if action == "GetPositionInfo":
-            return httpx.Response(200, text="<RelTime>00:00:00.000</RelTime><TrackDuration>00:00:00</TrackDuration>")
+            return httpx.Response(
+                200,
+                text="<RelTime>00:00:00.000</RelTime><TrackDuration>00:00:00</TrackDuration>"
+                "<TrackURI>http://example.test/clip.mp4?v=1&amp;q=2</TrackURI>",
+            )
 
         assert action == "Seek"
         body = ET.fromstring(request.content)
@@ -41,4 +45,5 @@ def test_tv_seek_uses_track_time_and_reads_zero_position(monkeypatch):
 
     info = asyncio.run(scenario())
     assert (info.state, info.position_s, info.duration_s) == (PlaybackState.PAUSED, 0, None)
+    assert info.track_uri == "http://example.test/clip.mp4?v=1&q=2"
     assert actions == ["Seek", "GetTransportInfo", "GetPositionInfo"]

@@ -18,7 +18,12 @@ from easytv.core.ports import (
     VideoDownloader,
 )
 from easytv.core.services import PlaybackService, TvService, VideoLibrary
-from easytv.infrastructure.repositories import JsonSavedTitleRepository, JsonTvRepository, JsonVideoRepository
+from easytv.infrastructure.repositories import (
+    JsonPlaybackQueueRepository,
+    JsonSavedTitleRepository,
+    JsonTvRepository,
+    JsonVideoRepository,
+)
 from easytv.infrastructure.storage import LocalVideoStorage
 from easytv.infrastructure.system import LanMediaUrlResolver, SystemClock, UuidGenerator
 
@@ -100,7 +105,8 @@ def build_container(
     catalog = CatalogService(catalog_source, clock, settings.max_video_height)
     cinema = CinemaService(JsonSavedTitleRepository(settings.data_dir / "cinema.json"), catalog, clock)
     urls = LanMediaUrlResolver(settings.public_host, settings.advertised_port)
-    playback = PlaybackService(tvs, library, controller, urls, catalog)
+    queues = JsonPlaybackQueueRepository(settings.data_dir / "playback-queues.json")
+    playback = PlaybackService(tvs, library, controller, urls, catalog, cinema, queues, ids)
     return Container(
         settings=settings, tvs=tvs, library=library, playback=playback, catalog=catalog, cinema=cinema
     )

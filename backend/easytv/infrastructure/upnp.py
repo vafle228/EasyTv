@@ -10,7 +10,7 @@ import re
 import socket
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin, urlsplit
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, unescape
 
 import httpx
 
@@ -256,15 +256,18 @@ class UpnpTvController:
         except TvCommandError:
             return PlaybackInfo(state=PlaybackState.UNKNOWN)
         state = _STATE_MAP.get((_xml_value(transport, "CurrentTransportState") or "").upper(), PlaybackState.UNKNOWN)
-        position = duration = None
+        position = duration = track_uri = None
         if state in (PlaybackState.PLAYING, PlaybackState.PAUSED):
             try:
                 pos = await self._call(tv, "GetPositionInfo")
                 position = _parse_time(_xml_value(pos, "RelTime"))
                 duration = _parse_time(_xml_value(pos, "TrackDuration")) or None
+                uri = _xml_value(pos, "TrackURI")
+                if uri and uri.upper() != "NOT_IMPLEMENTED":
+                    track_uri = unescape(uri)
             except TvCommandError:
                 pass
-        return PlaybackInfo(state=state, position_s=position, duration_s=duration)
+        return PlaybackInfo(state=state, position_s=position, duration_s=duration, track_uri=track_uri)
 
     async def _call(self, tv: Tv, action: str, args: str = "") -> str:
         body = (
