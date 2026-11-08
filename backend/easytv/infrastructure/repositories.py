@@ -108,6 +108,7 @@ class JsonVideoRepository:
                 origin_url=item.get("origin_url"),
                 progress=item.get("progress", 0.0),
                 error=item.get("error"),
+                content_type=item.get("content_type"),
             )
             if video.status in (VideoStatus.PENDING, VideoStatus.DOWNLOADING):
                 video.status, video.error = VideoStatus.FAILED, "Загрузка прервана перезапуском"
@@ -131,6 +132,7 @@ class JsonVideoRepository:
                     "origin_url": v.origin_url,
                     "progress": v.progress,
                     "error": v.error,
+                    "content_type": v.content_type,
                 }
                 for v in self._items.values()
             ]

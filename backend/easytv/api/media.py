@@ -47,6 +47,7 @@ def build_router(library: VideoLibrary) -> APIRouter:
         headers = {
             "Accept-Ranges": "bytes",
             "Content-Type": video.mime,
+            "X-Content-Type-Options": "nosniff",
             "transferMode.dlna.org": "Streaming",
             "contentFeatures.dlna.org": DLNA_FLAGS,
         }

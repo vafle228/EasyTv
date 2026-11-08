@@ -30,6 +30,11 @@ class InvalidVideoUrl(EasyTvError):
         super().__init__(f"Это не похоже на ссылку YouTube: {url}")
 
 
+class InvalidDirectVideoUrl(EasyTvError):
+    def __init__(self) -> None:
+        super().__init__("Введите полную HTTP(S)-ссылку на видеофайл без логина и пароля")
+
+
 class UnsupportedVideoFormat(EasyTvError):
     def __init__(self, filename: str) -> None:
         super().__init__(f"Формат файла не поддерживается: {filename}")

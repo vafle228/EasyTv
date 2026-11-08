@@ -290,5 +290,9 @@ class YoutubeRequest(Dto):
     url: str
 
 
+class DirectVideoRequest(Dto):
+    url: str
+
+
 class ErrorDto(Dto):
     detail: str
