@@ -73,7 +73,7 @@ def _save_response(response: httpx.Response, target: Path, on_progress: Progress
 _BINARY_TYPES = {"", "application/octet-stream", "binary/octet-stream", "application/force-download"}
 _VIDEO_TYPE = re.compile(r"video/[a-z0-9][a-z0-9.+_-]*")
 _FILE_EXTENSION = re.compile(r"\.[a-z0-9]{1,12}")
-_EXTENSIONS_BY_MIME = {mime_for(ext): ext for ext in sorted(SUPPORTED_EXTENSIONS, reverse=True)}
+_EXTENSIONS_BY_MIME = {mime_for(ext): ext for ext in sorted(SUPPORTED_EXTENSIONS)}
 
 
 def _is_video_type(mime: str) -> bool:
