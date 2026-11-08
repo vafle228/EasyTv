@@ -163,6 +163,7 @@ def _wait_ready(client: TestClient, video_id: str) -> dict:
 
 @pytest.mark.parametrize(("path", "headers", "title", "extension", "mime"), [
     ("/Holiday.MP4?sig=AbCd", {"Content-Type": "application/octet-stream"}, "Holiday", ".mp4", "video/mp4"),
+    ("/download?sig=AbCd", {"Content-Type": "video/mp4"}, "download", ".mp4", "video/mp4"),
     ("/download?sig=AbCd", {"Content-Type": "Video/WebM; charset=binary"}, "download", ".webm", "video/webm"),
     ("/file/42", {
         "Content-Type": "application/octet-stream",
