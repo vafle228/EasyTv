@@ -9,7 +9,6 @@ interface Props {
   onError: (message: string) => void;
 }
 
-/** The one "Добавить" field for every source. YouTube downloads for real; other kinds explain they're coming. */
 export function AddField({ onAdded, onError }: Props) {
   const [value, setValue] = useState("");
   const [adding, setAdding] = useState(false);
@@ -19,13 +18,13 @@ export function AddField({ onAdded, onError }: Props) {
     const url = value.trim();
     if (!url) return;
     const kind = detectSource(url);
-    if (kind !== "youtube") {
+    if (kind !== "youtube" && kind !== "direct") {
       onError(NOT_YET[kind]);
       return;
     }
     setAdding(true);
     try {
-      await api.addYoutube(url);
+      await (kind === "youtube" ? api.addYoutube(url) : api.addDirect(url));
       setValue("");
       onAdded();
     } catch (err) {
@@ -42,7 +41,7 @@ export function AddField({ onAdded, onError }: Props) {
         <input
           type="text"
           inputMode="url"
-          placeholder="Ссылка на YouTube, magnet, .m3u8 или страницу на animego"
+          placeholder="Ссылка на YouTube или видеофайл"
           aria-label="Что добавить"
           value={value}
           onChange={(e) => setValue(e.target.value)}

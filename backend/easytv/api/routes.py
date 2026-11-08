@@ -6,7 +6,7 @@ from fastapi import APIRouter, UploadFile
 
 from easytv.core.services import PlaybackService, TvService, VideoLibrary
 
-from .schemas import AddTvRequest, PlaybackDto, PlayRequest, SeekRequest, TvDto, VideoDto, YoutubeRequest
+from .schemas import AddTvRequest, DirectVideoRequest, PlaybackDto, PlayRequest, SeekRequest, TvDto, VideoDto, YoutubeRequest
 
 
 def build_router(tvs: TvService, library: VideoLibrary, playback: PlaybackService) -> APIRouter:
@@ -80,8 +80,12 @@ def build_router(tvs: TvService, library: VideoLibrary, playback: PlaybackServic
     async def add_youtube(body: YoutubeRequest) -> VideoDto:  # async: starts a task on the event loop
         return VideoDto.of(library.add_youtube(body.url))
 
+    @router.post("/videos/direct", response_model=VideoDto, status_code=202)
+    async def add_direct(body: DirectVideoRequest) -> VideoDto:
+        return VideoDto.of(library.add_direct(body.url))
+
     @router.delete("/videos/{video_id}", status_code=204)
-    def delete_video(video_id: str) -> None:
+    async def delete_video(video_id: str) -> None:
         library.delete(video_id)
 
     return router

@@ -11,8 +11,10 @@ from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from .errors import (
+    InvalidDirectVideoUrl,
     InvalidVideoUrl,
     PlaybackNotSeekable,
     TvNotFound,
@@ -153,10 +155,13 @@ class VideoLibrary:
         clock: Clock,
         ids: IdGenerator,
         fetcher: FileFetcher | None = None,
+        *,
+        direct_downloader: VideoDownloader,
     ) -> None:
         self._repo = repo
         self._storage = storage
         self._downloader = downloader
+        self._direct_downloader = direct_downloader
         self._fetcher = fetcher
         self._clock = clock
         self._ids = ids
@@ -204,7 +209,34 @@ class VideoLibrary:
             origin_url=url,
         )
         self._repo.add(video)
-        self._start(self._download(video))
+        self._start(self._download(video, self._downloader))
+        return video
+
+    def add_direct(self, url: str) -> Video:
+        url = url.strip()
+        try:
+            parsed = urlsplit(url)
+            valid = (
+                parsed.scheme in ("http", "https")
+                and parsed.hostname
+                and parsed.username is None
+                and parsed.port != 0
+                and not any(char.isspace() for char in url)
+            )
+        except ValueError:
+            raise InvalidDirectVideoUrl() from None
+        if not valid:
+            raise InvalidDirectVideoUrl()
+        video = Video(
+            id=self._ids.new_id(),
+            title=parsed.hostname or "Видео по ссылке",
+            source=VideoSource.DIRECT,
+            status=VideoStatus.PENDING,
+            created_at=self._clock.now(),
+            origin_url=url,
+        )
+        self._repo.add(video)
+        self._start(self._download(video, self._direct_downloader))
         return video
 
     def add_stream(self, stream: Stream, title: str, origin: str) -> Video:
@@ -239,28 +271,38 @@ class VideoLibrary:
             self._storage.delete(video.path)
         self._repo.delete(video_id)
 
-    async def _download(self, video: Video) -> None:
+    async def _download(self, video: Video, downloader: VideoDownloader) -> None:
+        if self._repo.get(video.id) is None:
+            return
         video.status = VideoStatus.DOWNLOADING
         self._repo.update(video)
 
         def on_progress(fraction: float, title: str | None) -> None:
+            if video.source is VideoSource.DIRECT and self._repo.get(video.id) is None:
+                raise RuntimeError("Загрузка отменена")
             video.progress = max(0.0, min(fraction, 1.0))
             if title:
                 video.title = title
 
         try:
             result = await asyncio.to_thread(
-                self._downloader.download, video.origin_url or "", self._storage.directory, video.id, on_progress
+                downloader.download, video.origin_url or "", self._storage.directory, video.id, on_progress
             )
         except Exception as exc:  # downloader errors are reported to the user, not raised
-            log.warning("Download of %s failed: %s", video.origin_url, exc)
+            if self._repo.get(video.id) is None:
+                return
+            log.warning("Download of %s failed: %s", video.id, exc)
             video.status = VideoStatus.FAILED
             video.error = str(exc) or exc.__class__.__name__
             self._repo.update(video)
             return
 
+        if self._repo.get(video.id) is None:
+            self._storage.delete(result.path)
+            return
         video.path = result.path
         video.title = result.title or video.title
+        video.content_type = result.content_type
         video.size = result.path.stat().st_size if result.path.exists() else None
         video.progress = 1.0
         video.status = VideoStatus.READY

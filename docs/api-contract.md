@@ -28,6 +28,7 @@
 | GET `/videos` | Список Video |
 | POST `/videos/upload` | multipart с полем `file` → Video, 201 |
 | POST `/videos/youtube` | `{url}` → Video, 202 |
+| POST `/videos/direct` | `{url}` с прямой HTTP(S)-ссылкой на видеофайл → Video, 202 |
 | DELETE `/videos/{id}` | Удаление, 204 |
 | GET `/catalog/search?q=...` | Список CatalogTitle |
 | GET `/catalog/collections` | Список Collection |
@@ -43,10 +44,12 @@
 
 Перемотка доступна в состояниях `playing` и `paused`. Передайте одно целое число в секундах. `positionS` задаёт неотрицательную позицию от начала видео, а `offsetS` задаёт смещение от текущей позиции ТВ и может быть отрицательным. Сервер ограничивает результат началом и, если известна длительность, концом видео. Для смещения при неизвестной позиции ТВ возвращается 409. Отказ ТВ выполнить команду возвращается как 502.
 
+Для `/videos/direct` некорректный адрес сразу даёт 400. Тип файла определяется по `Content-Type` итогового ответа после редиректов. Для бинарной отдачи без конкретного типа используется расширение из `Content-Disposition` или URL. Если по ссылке приходит страница, плейлист либо ответ с ошибкой, загрузка переходит в `failed`, а причина записывается в `error`.
+
 ## Основные модели
 
 - Tv: `id`, `name`, `ip`, `manufacturer`, `model`, `online`, `lastSeen`.
-- Video: `id`, `title`, `source`, `status`, `progress`, `size`, `error`, `originUrl`, `createdAt`. Источники: `upload`, `youtube`, `animego`; состояния: `pending`, `downloading`, `ready`, `failed`. Прогресс — доля от 0 до 1.
+- Video: `id`, `title`, `source`, `status`, `progress`, `size`, `error`, `originUrl`, `createdAt`. Источники: `upload`, `youtube`, `animego`, `direct`; состояния: `pending`, `downloading`, `ready`, `failed`. Прогресс — доля от 0 до 1.
 - Playback: `state`, `videoId`, `positionS`, `durationS`, `title`, `stream`. Состояния: `playing`, `paused`, `stopped`, `transitioning`, `no_media`, `unknown`. Времена — секунды, могут быть неизвестны.
 - StreamRef: `titleId`, `episode` (0 для фильма), `translationId`, `provider` (по умолчанию `auto`).
 - SavedTitle: метаданные тайтла, озвучка, `lastEpisode`, `watched`, даты добавления и обновления. Сейчас это общая запись; `watched` означает запущенные серии, не достоверно досмотренные.

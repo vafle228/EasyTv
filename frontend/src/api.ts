@@ -90,6 +90,7 @@ export const api = {
 
   videos: () => request<Video[]>("/api/videos"),
   addYoutube: (url: string) => request<Video>("/api/videos/youtube", { method: "POST", body: JSON.stringify({ url }) }),
+  addDirect: (url: string) => request<Video>("/api/videos/direct", { method: "POST", body: JSON.stringify({ url }) }),
   deleteVideo: (id: string) => request<void>(`/api/videos/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /** Upload with progress reporting (fetch can't report upload progress). */

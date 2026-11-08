@@ -27,6 +27,7 @@ class VideoSource(str, Enum):
     UPLOAD = "upload"
     YOUTUBE = "youtube"
     ANIMEGO = "animego"
+    DIRECT = "direct"
 
 
 class VideoStatus(str, Enum):
@@ -50,6 +51,7 @@ class Video:
     origin_url: str | None = None
     progress: float = 0.0
     error: str | None = None
+    content_type: str | None = None
 
     @property
     def extension(self) -> str:
@@ -57,7 +59,7 @@ class Video:
 
     @property
     def mime(self) -> str:
-        return mime_for(self.extension)
+        return self.content_type or mime_for(self.extension)
 
 
 @dataclass(frozen=True)
@@ -220,6 +222,7 @@ class SavedTitle:
 class DownloadResult:
     path: Path
     title: str
+    content_type: str | None = None
 
 
 _MIME = {

@@ -40,6 +40,7 @@ def build_container(
     locator: TvLocator | None = None,
     controller: TvController | None = None,
     downloader: VideoDownloader | None = None,
+    direct_downloader: VideoDownloader | None = None,
     catalog_source: CatalogSource | None = None,
     fetcher: FileFetcher | None = None,
     clock: Clock | None = None,
@@ -70,6 +71,10 @@ def build_container(
         from easytv.infrastructure.fetch import HttpFileFetcher
 
         fetcher = HttpFileFetcher()
+    if direct_downloader is None:
+        from easytv.infrastructure.fetch import HttpVideoDownloader
+
+        direct_downloader = HttpVideoDownloader()
     clock = clock or SystemClock()
     ids = ids or UuidGenerator()
 
@@ -84,7 +89,13 @@ def build_container(
         seeds=settings.seeds,
     )
     library = VideoLibrary(
-        JsonVideoRepository(settings.data_dir / "videos.json"), storage, downloader, clock, ids, fetcher
+        JsonVideoRepository(settings.data_dir / "videos.json"),
+        storage,
+        downloader,
+        clock,
+        ids,
+        fetcher,
+        direct_downloader=direct_downloader,
     )
     catalog = CatalogService(catalog_source, clock, settings.max_video_height)
     cinema = CinemaService(JsonSavedTitleRepository(settings.data_dir / "cinema.json"), catalog, clock)

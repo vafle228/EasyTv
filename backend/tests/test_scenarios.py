@@ -5,7 +5,9 @@ from __future__ import annotations
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Event
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,6 +16,8 @@ from easytv.config import Settings
 from easytv.container import build_container
 from easytv.core.errors import TvCommandError
 from easytv.core.models import DownloadResult, MediaItem, PlaybackInfo, PlaybackState, Tv
+from easytv.infrastructure.fetch import HttpVideoDownloader
+from easytv.infrastructure.repositories import JsonVideoRepository
 
 LIVING_ROOM = Tv(
     id="tv-living",
@@ -119,7 +123,12 @@ class ManualClock:
 
 
 @pytest.fixture
-def env(tmp_path: Path):
+def direct_responses() -> dict[str, httpx.Response]:
+    return {}
+
+
+@pytest.fixture
+def env(tmp_path: Path, direct_responses):
     discovery, controller, downloader, clock = FakeDiscovery(), FakeController(), FakeDownloader(), ManualClock()
     locator = FakeLocator()
     settings = Settings(
@@ -130,8 +139,14 @@ def env(tmp_path: Path):
         offline_after_s=60,
         tv_hosts=["192.168.0.180"],
     )
+    def serve_file(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        return direct_responses.pop(str(request.url))
+
+    direct_downloader = HttpVideoDownloader(transport=httpx.MockTransport(serve_file))
     container = build_container(
-        settings, discovery=discovery, locator=locator, controller=controller, downloader=downloader, clock=clock
+        settings, discovery=discovery, locator=locator, controller=controller, downloader=downloader,
+        direct_downloader=direct_downloader, clock=clock,
     )
     with TestClient(create_app(container)) as client:
         yield client, discovery, controller, downloader, clock, locator
@@ -144,6 +159,102 @@ def _wait_ready(client: TestClient, video_id: str) -> dict:
             return video
         time.sleep(0.02)
     raise AssertionError("download did not finish")
+
+
+@pytest.mark.parametrize(("path", "headers", "title", "extension", "mime"), [
+    ("/Holiday.MP4?sig=AbCd", {"Content-Type": "application/octet-stream"}, "Holiday", ".mp4", "video/mp4"),
+    ("/download?sig=AbCd", {"Content-Type": "Video/WebM; charset=binary"}, "download", ".webm", "video/webm"),
+    ("/file/42", {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": "attachment; filename*=UTF-8''%D0%9A%D0%BB%D0%B8%D0%BF.mkv",
+    }, "Клип", ".mkv", "video/x-matroska"),
+    ("/file/42", {"Content-Type": "video/x-custom-container"}, "42", ".video", "video/x-custom-container"),
+])
+def test_direct_file_download_and_play(env, direct_responses, tmp_path, path, headers, title, extension, mime):
+    client, _, controller, _, _, _ = env
+    link = "https://media.example/redirect"
+    direct_responses[link] = httpx.Response(302, headers={"Location": path})
+    content = b"fixture video bytes"
+    direct_responses["https://media.example" + path] = httpx.Response(200, headers=headers, content=content)
+
+    response = client.post("/api/videos/direct", json={"url": link})
+    assert response.status_code == 202
+    pending = response.json()
+    assert pending["status"] == "pending"
+    assert pending["source"] == "direct"
+    assert pending["originUrl"] == link
+    video_id = pending["id"]
+
+    ready = _wait_ready(client, video_id)
+    assert (ready["status"], ready["title"], ready["size"], ready["progress"]) == ("ready", title, len(content), 1.0)
+    assert not direct_responses
+    client.post("/api/tvs/refresh")
+    assert client.post("/api/tvs/tv-living/play", json={"videoId": video_id}).status_code == 200
+    restored = JsonVideoRepository(tmp_path / "videos.json").get(video_id)
+    assert restored is not None and restored.mime == mime
+    _, _, media = controller.commands[-1]
+    media_path = f"/media/{video_id}{extension}"
+    assert media.url == "http://192.168.0.10:8080" + media_path
+    assert media.mime == mime
+    part = client.get(media_path, headers={"Range": "bytes=2-5"})
+    assert part.status_code == 206
+    assert part.headers["content-type"] == mime
+    assert part.content == content[2:6]
+
+
+@pytest.mark.parametrize(("status", "mime", "content", "error"), [
+    (200, "text/html", b"<html>Expired link</html>", "Ссылка не ведёт напрямую на видеофайл"),
+    (200, "video/vnd.mpegurl", b"#EXTM3U", "Ссылка не ведёт напрямую на видеофайл"),
+    (200, "video/mp4", b"", "Сервер вернул пустой видеофайл"),
+    (206, "video/mp4", b"partial response", "Сервер ответил HTTP 206"),
+    (403, "text/plain", b"Forbidden", "Сервер ответил HTTP 403"),
+])
+def test_direct_file_download_fails_without_saving(env, direct_responses, tmp_path, status, mime, content, error):
+    client, _, _, _, _, _ = env
+    link = "https://media.example/clip.mp4"
+    direct_responses[link] = httpx.Response(status, headers={"Content-Type": mime}, content=content)
+
+    response = client.post("/api/videos/direct", json={"url": link})
+    assert response.status_code == 202
+    video = _wait_ready(client, response.json()["id"])
+    assert video["status"] == "failed"
+    assert video["error"] == error
+    assert not list((tmp_path / "videos").iterdir())
+
+
+@pytest.mark.parametrize("url", ["file:///clip.mp4", "https://", "https://media.example:bad/clip.mp4",
+                                 "https://user:password@media.example/clip.mp4"])
+def test_invalid_direct_url_is_not_queued(env, url):
+    client, _, _, _, _, _ = env
+    assert client.post("/api/videos/direct", json={"url": url}).status_code == 400
+    assert client.get("/api/videos").json() == []
+
+
+def test_deleted_direct_download_is_not_restored(env, direct_responses, tmp_path):
+    client, _, _, _, _, _ = env
+    started, resume, closed = Event(), Event(), Event()
+
+    class PausedStream(httpx.SyncByteStream):
+        def __iter__(self):
+            started.set()
+            assert resume.wait(5)
+            yield b"x" * (1 << 20)
+
+        def close(self):
+            closed.set()
+
+    link = "https://media.example/download"
+    direct_responses[link] = httpx.Response(200, headers={"Content-Type": "video/mp4"}, stream=PausedStream())
+    response = client.post("/api/videos/direct", json={"url": link})
+    assert response.status_code == 202
+    try:
+        assert started.wait(5)
+        assert client.delete(f"/api/videos/{response.json()['id']}").status_code == 204
+    finally:
+        resume.set()
+    assert closed.wait(5)
+    assert client.get("/api/videos").json() == []
+    assert not list((tmp_path / "videos").iterdir())
 
 
 def test_found_tv_plays_uploaded_file_and_streams_it(env):

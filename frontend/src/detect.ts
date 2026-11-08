@@ -1,21 +1,28 @@
-/** What the single "Добавить" field recognises in a pasted link. Only YouTube has a backend so far. */
-export type SourceKind = "youtube" | "torrent" | "stream" | "playlist" | "site" | "unknown";
+/** Route pasted URLs to YouTube, direct-file detection on the server, or a source hint. */
+export type SourceKind = "youtube" | "direct" | "torrent" | "stream" | "playlist" | "unknown";
+
+const YOUTUBE = /^(?:(?:(?:www|m|music)\.)?youtube\.com\/(?:watch\?|shorts\/|live\/|embed\/)|youtu\.be\/).+/i;
 
 export function detectSource(input: string): SourceKind {
-  const s = input.trim().toLowerCase();
-  if (!s) return "unknown";
-  if (s.startsWith("magnet:") || s.endsWith(".torrent")) return "torrent";
-  if (/^https?:\/\/([a-z0-9-]+\.)*(youtube\.com|youtu\.be)\//.test(s)) return "youtube";
-  if (/\.m3u8(\?|$)/.test(s)) return "stream";
-  if (/\.m3u(\?|$)/.test(s)) return "playlist";
-  if (/^https?:\/\/([a-z0-9-]+\.)*animego\./.test(s)) return "site";
-  return "unknown";
+  const s = input.trim();
+  if (/^magnet:/i.test(s)) return "torrent";
+  if (!/^https?:\/\//i.test(s)) return "unknown";
+
+  try {
+    const { hostname, pathname, search } = new URL(s);
+    const path = pathname.toLowerCase();
+    if (path.endsWith(".torrent")) return "torrent";
+    if (path.endsWith(".m3u8")) return "stream";
+    if (path.endsWith(".m3u")) return "playlist";
+    return YOUTUBE.test(hostname + pathname + search) ? "youtube" : "direct";
+  } catch {
+    return "unknown";
+  }
 }
 
-export const NOT_YET: Record<Exclude<SourceKind, "youtube">, string> = {
-  torrent: "Торренты появятся в следующей версии. Пока можно добавить ролик с YouTube или файл с компьютера.",
+export const NOT_YET: Record<Exclude<SourceKind, "youtube" | "direct">, string> = {
+  torrent: "Торренты появятся в следующей версии. Пока можно добавить ролик с YouTube или видеофайл.",
   stream: "Прямые потоки (эфир) появятся в следующей версии.",
   playlist: "Плейлисты каналов M3U появятся в следующей версии.",
-  site: "Каталог animego появится в следующей версии.",
-  unknown: "Поддерживаются ссылки на YouTube. Торренты, потоки m3u8, плейлисты M3U и animego появятся позже.",
+  unknown: "Вставьте полную ссылку на YouTube или видеофайл, начиная с http:// или https://.",
 };

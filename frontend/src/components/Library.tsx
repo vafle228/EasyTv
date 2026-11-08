@@ -82,7 +82,8 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
   const q = query.trim().toLowerCase();
   const shown = videos?.filter(
     (v) =>
-      (filter === "all" || filter === v.source || (filter === "cinema" && v.source === "animego")) &&
+      (filter === "all" || filter === v.source || (filter === "cinema" && v.source === "animego") ||
+        (filter === "upload" && v.source === "direct")) &&
       (!q || v.title.toLowerCase().includes(q)),
   );
 
@@ -228,7 +229,7 @@ export function Library({ videos, playingId, canPlay, onPlay, onChanged, onError
 }
 
 export function describe(v: Video, playing = false): string {
-  const source = { youtube: "YouTube", animego: "animego", upload: "С компьютера" }[v.source];
+  const source = { youtube: "YouTube", animego: "animego", upload: "С компьютера", direct: "По ссылке" }[v.source];
   switch (v.status) {
     case "pending":
       return `${source}, в очереди`;
