@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('up', 'down', 'stop', 'logs', 'discover', 'rebuild', 'test', 'native', 'help', '-h', '--help')]
+    [ValidateSet('up', 'ai', 'down', 'stop', 'logs', 'discover', 'rebuild', 'test', 'native', 'help', '-h', '--help')]
     [string]$Command = 'up'
 )
 

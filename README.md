@@ -62,6 +62,9 @@ powershell -ExecutionPolicy Bypass -File scripts/download-relayvsr.ps1
 ./run.cmd ai
 ```
 
+Команда `ai` собирает и запускает оба сервиса: EasyTv и RelayVSR. В Windows она проходит через
+`run.cmd` → `run.ps1` → `run.sh`; также можно вызвать `./run.ps1 ai` или `./run.sh ai` напрямую.
+
 Веса находятся в `D:\RelayVsrModel`, подключаются только для чтения и не включаются в образ.
 Скрипт продолжает прерванное скачивание и проверяет SHA-256. Путь меняется через `RELAYVSR_MODEL_DIR`
 в `.env`; для Linux укажите абсолютный путь к каталогу с `wan.safetensors` и `flash.safetensors`
@@ -164,6 +167,10 @@ scripts/           поиск телевизоров с компьютера д�
 Контекст проекта и правила работы агентов: [AGENTS.md](AGENTS.md).
 Задачи выбираем из [TASKS.md](TASKS.md).
 См. также [дизайн-систему](docs/design-system.md) и [контракт API](docs/api-contract.md).
+
+Регрессионные проверки Windows-обёрток: из корня репозитория выполните
+`python -m pytest scripts/tests`. Они запускают настоящую цепочку cmd → PowerShell → Git Bash
+в отдельном временном каталоге, подменяя Docker и открытие браузера.
 
 ```bash
 cd backend && python -m venv .venv && . .venv/bin/activate && pip install -e '.[test]'
