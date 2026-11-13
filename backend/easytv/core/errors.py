@@ -2,6 +2,12 @@ class EasyTvError(Exception):
     """Base class for domain errors."""
 
 
+class EnhancementNotNeeded(EasyTvError):
+    def __init__(self, width: int, height: int):
+        super().__init__(f"Разрешение {width}×{height} уже достигает Full HD или выше. "
+                         "ИИ улучшение недоступно; будет использован оригинал.")
+
+
 class EnhancementUnavailable(EasyTvError):
     pass
 

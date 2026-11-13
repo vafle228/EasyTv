@@ -64,7 +64,7 @@ export const api = {
       method: "PUT", body: JSON.stringify({ enabled, streaming }),
     }),
   prepareEnhanced: (source: { videoId: string } | { stream: StreamRef; title: string }, retry = false) =>
-    request<{ url: string | null; job: EnhancementJob | null }>("/api/enhancement/prepare", post({ ...source, retry })),
+    request<{ url: string | null; job: EnhancementJob | null; notice: string | null }>("/api/enhancement/prepare", post({ ...source, retry })),
   tvs: () => request<Tv[]>("/api/tvs"),
   refreshTvs: () => request<Tv[]>("/api/tvs/refresh", { method: "POST" }),
   addTv: (address: string) => request<Tv>("/api/tvs", { method: "POST", body: JSON.stringify({ address }) }),

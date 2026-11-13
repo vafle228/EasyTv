@@ -104,6 +104,7 @@ class PlaybackDto(Dto):
     title: str | None = None
     stream: StreamRefDto | None = None
     enhanced: bool = False
+    enhancement_notice: str | None = None
     seekable: bool = True
     error: str | None = None
 
@@ -117,6 +118,7 @@ class PlaybackDto(Dto):
             title=s.title,
             stream=StreamRefDto.of(s.stream) if s.stream else None,
             enhanced=s.enhancement_id is not None,
+            enhancement_notice=s.enhancement_notice,
             seekable=s.seekable,
             error=s.error,
         )

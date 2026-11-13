@@ -50,7 +50,7 @@ def build_router(service: EnhancementService, worker_url: str | None, transport=
             except EnhancementUnavailable as exc:
                 available, error = False, str(exc)
         return {**asdict(service.settings.get()), "available": available, "error": error or service.error,
-                "jobs": [dto(job) for job in service.jobs.values()]}
+                "jobs": [dto(job) for job in service.jobs.values()], "notices": service.notices}
 
     @router.put("/api/enhancement")
     async def configure(body: ConfigureRequest):
@@ -63,9 +63,10 @@ def build_router(service: EnhancementService, worker_url: str | None, transport=
         job = await service.prepare(video_id=body.video_id, ref=ref, title=body.title,
                                     foreground=True, retry=body.retry)
         if job is None:
-            return {"url": ref.path if ref else f"/media/{body.video_id}", "job": None}
+            return {"url": ref.path if ref else f"/media/{body.video_id}", "job": None,
+                    "notice": service.notice(body.video_id, ref)}
         ready = job.state == "ready" or (job.state == "running" and service.settings.get().streaming and job.stream_ready)
-        return {"url": job.path if ready else None, "job": dto(job)}
+        return {"url": job.path if ready else None, "job": dto(job), "notice": None}
 
     @router.api_route("/enhanced/{name}", methods=["GET", "HEAD"], include_in_schema=False)
     async def media(name: str, request: Request):

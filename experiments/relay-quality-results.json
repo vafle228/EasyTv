@@ -1,0 +1,166 @@
+{
+  "timings": {
+    "load_seconds": 62.38007323099919,
+    "runs": [
+      {
+        "scene": "motion",
+        "window": 16,
+        "frames": 192,
+        "video_seconds": 8.008008008008009,
+        "elapsed_s": 30.09244182099974,
+        "fps": 6.380339659442808,
+        "first_frame_s": 1.7592413700003817,
+        "peak_gpu_mib": 15464,
+        "allocated_mib": 13369.02685546875,
+        "width": 1916,
+        "height": 1080
+      },
+      {
+        "scene": "motion",
+        "window": 64,
+        "frames": 192,
+        "video_seconds": 8.008008008008009,
+        "elapsed_s": 21.10518962199967,
+        "fps": 9.097288555032106,
+        "first_frame_s": 2.1731242269997892,
+        "peak_gpu_mib": 15479,
+        "allocated_mib": 13367.44580078125,
+        "width": 1916,
+        "height": 1080
+      },
+      {
+        "scene": "cuts",
+        "window": 64,
+        "frames": 192,
+        "video_seconds": 8.008008008008009,
+        "elapsed_s": 21.531198308999592,
+        "fps": 8.917292815966865,
+        "first_frame_s": 2.3140894629996183,
+        "peak_gpu_mib": 15446,
+        "allocated_mib": 13367.44580078125,
+        "width": 1916,
+        "height": 1080
+      },
+      {
+        "scene": "cuts",
+        "window": 16,
+        "frames": 192,
+        "video_seconds": 8.008008008008009,
+        "elapsed_s": 29.875916676999623,
+        "fps": 6.426581051078302,
+        "first_frame_s": 1.7091041050007334,
+        "peak_gpu_mib": 15424,
+        "allocated_mib": 13369.02685546875,
+        "width": 1916,
+        "height": 1080
+      },
+      {
+        "scene": "faces",
+        "window": 16,
+        "frames": 192,
+        "video_seconds": 8.008008008008009,
+        "elapsed_s": 29.959259015999123,
+        "fps": 6.408703229190895,
+        "first_frame_s": 1.7301637999989907,
+        "peak_gpu_mib": 15432,
+        "allocated_mib": 13369.02685546875,
+        "width": 1916,
+        "height": 1080
+      },
+      {
+        "scene": "faces",
+        "window": 64,
+        "frames": 192,
+        "video_seconds": 8.008008008008009,
+        "elapsed_s": 22.169616986999245,
+        "fps": 8.660501447210073,
+        "first_frame_s": 2.3679946510001173,
+        "peak_gpu_mib": 15437,
+        "allocated_mib": 13367.44580078125,
+        "width": 1916,
+        "height": 1080
+      }
+    ]
+  },
+  "comparison": [
+    {
+      "scene": "motion",
+      "frames": 192,
+      "cuts": [
+        6,
+        75,
+        103,
+        130,
+        158,
+        184
+      ],
+      "mean_ssim": 0.9670144791666667,
+      "min_ssim": 0.932665,
+      "mean_mae": 2.381547233865907,
+      "mean_changed_pct": 2.2061373666640836,
+      "temporal_difference_no_cuts": 2.029403221718273,
+      "motion_ratio_no_cuts": 0.9696733553493735,
+      "worst_frames": [
+        62,
+        61,
+        63,
+        31,
+        60,
+        46,
+        45,
+        30
+      ]
+    },
+    {
+      "scene": "cuts",
+      "frames": 192,
+      "cuts": [
+        27,
+        66
+      ],
+      "mean_ssim": 0.9475232447916667,
+      "min_ssim": 0.909226,
+      "mean_mae": 2.8027024374653897,
+      "mean_changed_pct": 4.021500416472958,
+      "temporal_difference_no_cuts": 1.9126653389706796,
+      "motion_ratio_no_cuts": 0.9423061888520526,
+      "worst_frames": [
+        120,
+        121,
+        165,
+        122,
+        180,
+        106,
+        150,
+        105
+      ]
+    },
+    {
+      "scene": "faces",
+      "frames": 192,
+      "cuts": [
+        53,
+        77,
+        113,
+        163,
+        183
+      ],
+      "mean_ssim": 0.9879279114583334,
+      "min_ssim": 0.978078,
+      "mean_mae": 1.311613824373732,
+      "mean_changed_pct": 0.21778266891368356,
+      "temporal_difference_no_cuts": 0.9476831639746586,
+      "motion_ratio_no_cuts": 0.9453882214470655,
+      "worst_frames": [
+        105,
+        106,
+        16,
+        15,
+        17,
+        14,
+        18,
+        90
+      ]
+    }
+  ]
+}

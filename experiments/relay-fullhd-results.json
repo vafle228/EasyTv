@@ -1,0 +1,100 @@
+{
+  "load_seconds": 62.1060853350009,
+  "runs": [
+    {
+      "label": "warmup",
+      "window": 16,
+      "elapsed_s": 32.24364206999962,
+      "frames": 96,
+      "fps": 2.977331152342776,
+      "video_seconds": 4.004004004004004,
+      "stage_s": {
+        "wan_input": 0.8056249119937419,
+        "wan": 9.57965838623047,
+        "flash_condition": 0.6401345848739146,
+        "flash_input": 0.05333609580248594,
+        "flash": 7.8391231803894055
+      },
+      "gpu_peak_mib": 15406,
+      "allocated_mib": 13368.845703125,
+      "reserved_mib": 13584.0,
+      "yield_to_encoder_s": 6.959919085988076
+    },
+    {
+      "label": "baseline",
+      "window": 16,
+      "elapsed_s": 15.531678397001087,
+      "frames": 96,
+      "fps": 6.180916031491872,
+      "video_seconds": 4.004004004004004,
+      "stage_s": {
+        "wan_input": 0.003652992010116577,
+        "wan": 6.313945678710937,
+        "flash_condition": 0.2714573779702186,
+        "flash_input": 0.05264105597138405,
+        "flash": 6.606736770629882
+      },
+      "gpu_peak_mib": 15416,
+      "allocated_mib": 13369.02685546875,
+      "reserved_mib": 13592.0,
+      "yield_to_encoder_s": 6.984111230989583
+    },
+    {
+      "label": "cudnn",
+      "window": 16,
+      "elapsed_s": 15.619133527001395,
+      "frames": 96,
+      "fps": 6.1463076574664735,
+      "video_seconds": 4.004004004004004,
+      "stage_s": {
+        "wan_input": 0.003792000025510788,
+        "wan": 6.324622497558593,
+        "flash_condition": 0.2686394879519939,
+        "flash_input": 0.05971897605806591,
+        "flash": 6.64666796875
+      },
+      "gpu_peak_mib": 15415,
+      "allocated_mib": 13369.02685546875,
+      "reserved_mib": 13592.0,
+      "yield_to_encoder_s": 6.893099026987329
+    },
+    {
+      "label": "window32",
+      "window": 32,
+      "elapsed_s": 12.657323653000276,
+      "frames": 96,
+      "fps": 7.584541774535747,
+      "video_seconds": 4.004004004004004,
+      "stage_s": {
+        "wan_input": 0.0018425920009613036,
+        "wan": 3.806528503417969,
+        "flash_condition": 0.16855884763598444,
+        "flash_input": 0.05284057589620353,
+        "flash": 6.44911297607422
+      },
+      "gpu_peak_mib": 15415,
+      "allocated_mib": 13367.89892578125,
+      "reserved_mib": 13592.0,
+      "yield_to_encoder_s": 6.639166437989843
+    },
+    {
+      "label": "window64",
+      "window": 64,
+      "elapsed_s": 10.740463629999795,
+      "frames": 96,
+      "fps": 8.938161638744997,
+      "video_seconds": 4.004004004004004,
+      "stage_s": {
+        "wan_input": 0.0010715839862823486,
+        "wan": 2.1246097412109375,
+        "flash_condition": 0.10112355187535285,
+        "flash_input": 0.05037884798645974,
+        "flash": 6.343091415405274
+      },
+      "gpu_peak_mib": 15269,
+      "allocated_mib": 13320.072265625,
+      "reserved_mib": 13448.0,
+      "yield_to_encoder_s": 6.57488196500708
+    }
+  ]
+}

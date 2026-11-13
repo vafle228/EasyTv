@@ -126,6 +126,7 @@ function Remote({ tvId }: { tvId: string }) {
           </div>
           <span className="timeline__time">–</span>
         </div>
+        {r.enhancementNotice && <p className="small muted" role="status">{r.enhancementNotice}</p>}
         {r.error && <p className="video__error">{r.error}</p>}
         <PlaybackQueue queue={r.queue.data} error={r.queue.error} busy={r.busy} onRemove={r.removeQueued} />
         <Link className="btn btn--block" to={R.tvOf(tvId)}>

@@ -34,6 +34,7 @@ export interface Playback {
   title: string | null;
   stream: StreamRef | null;
   enhanced: boolean;
+  enhancementNotice: string | null;
   seekable: boolean;
   error: string | null;
 }
@@ -57,6 +58,7 @@ export interface Enhancement {
   available: boolean;
   error: string | null;
   jobs: EnhancementJob[];
+  notices: Record<string, string>;
 }
 
 export interface PlaybackQueue {

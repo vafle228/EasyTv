@@ -15,6 +15,8 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
+from .resolution import model_size, source_address, source_options
+
 
 class Cancelled(Exception):
     pass
@@ -34,6 +36,7 @@ class InferenceEngine:
         torch.set_grad_enabled(False)
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA недоступна в контейнере RelayVSR")
+        torch.cuda.set_per_process_memory_fraction(0.85)
         weights = Path(os.environ.get("RELAYVSR_WEIGHTS", "/weights"))
         self.models = load_checkpoints(weights / "wan.safetensors", weights / "flash.safetensors")
 
@@ -60,8 +63,8 @@ def run(request, models, cancelled, report):
     wan, flash = models
     source, output = request["source"], Path(request["output"])
     headers = "".join(f"{k}: {v}\r\n" for k, v in source.get("headers", {}).items())
-    options = {"headers": headers} if headers else {}
-    address = source.get("url") or str(Path(os.environ.get("RELAYVSR_INPUT", "/input")) / source["file"])
+    options = source_options(source)
+    address = source_address(source)
 
     with av.open(address, options=options, timeout=(30, 60)) as media:
         video = media.streams.video[0]
@@ -72,7 +75,8 @@ def run(request, models, cancelled, report):
         duration = float(video.duration * video.time_base) if video.duration else None
         if duration is None and media.duration:
             duration = media.duration / av.time_base
-        width, height = video.width * 4, video.height * 4
+        size = model_size(video.width, video.height, video.sample_aspect_ratio)
+        width, height = size.output
         report(state="running", fps=float(fps), duration=duration, width=width, height=height)
         check_cancelled(cancelled)
         sampler = WanVSRPipeline(
@@ -99,6 +103,8 @@ def run(request, models, cancelled, report):
                 if first_time is None:
                     first_time = stamp or 0
                 target = round((stamp - first_time) * float(fps)) if stamp is not None else index
+                if (frame.width, frame.height) != (size.width, size.height):
+                    frame = frame.reformat(width=size.width, height=size.height, interpolation="LANCZOS")
                 rgb = torch.from_numpy(np.ascontiguousarray(frame.to_ndarray(format="rgb24"))).permute(2, 0, 1).contiguous()
                 if target < index:
                     continue
@@ -158,7 +164,7 @@ def failure(exc):
     # CDN URLs/headers may contain credentials: do not expose arbitrary exception messages.
     kind = type(exc).__name__
     if "OutOfMemory" in kind:
-        detail = "Недостаточно видеопамяти для этого разрешения. Выключите ИИ или выберите меньший исходник."
+        detail = "Недостаточно видеопамяти. Закройте другие приложения, использующие GPU, или выключите ИИ."
     elif isinstance(exc, FileNotFoundError):
         detail = "Не найден исходник, ffmpeg или файл весов RelayVSR"
     else:

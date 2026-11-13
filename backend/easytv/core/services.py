@@ -460,6 +460,7 @@ class PlaybackService:
                           seekable=not job or job.state == "ready")
         return await self._start(tv, media, PlaybackStatus(
             state=PlaybackState.TRANSITIONING, video_id=video_id,
+            enhancement_notice=self._enhancement.notice(video_id=video_id),
             enhancement_id=job.id if job else None, seekable=not job or job.state == "ready",
         ))
 
@@ -471,6 +472,7 @@ class PlaybackService:
         media = MediaItem(url=self._urls.url_for_path(job.path if job else ref.path, tv), title=title, mime="video/mp4",
                           seekable=not job or job.state == "ready")
         status = PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref,
+                                enhancement_notice=self._enhancement.notice(ref=ref),
                                 enhancement_id=job.id if job else None, seekable=not job or job.state == "ready")
         return await self._start(tv, media, status)
 
