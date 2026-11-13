@@ -33,6 +33,30 @@ export interface Playback {
   /** Set when the TV shows an episode streamed from a site rather than a library video. */
   title: string | null;
   stream: StreamRef | null;
+  enhanced: boolean;
+  seekable: boolean;
+  error: string | null;
+}
+
+export interface EnhancementJob {
+  id: string;
+  key: string;
+  title: string | null;
+  state: "pending" | "loading" | "running" | "ready" | "failed" | "cancelled";
+  streamReady: boolean;
+  progress: number | null;
+  speed: number | null;
+  error: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface Enhancement {
+  enabled: boolean;
+  streaming: boolean;
+  available: boolean;
+  error: string | null;
+  jobs: EnhancementJob[];
 }
 
 export interface PlaybackQueue {

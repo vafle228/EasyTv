@@ -5,6 +5,7 @@ import { Icon } from "../components/Icons";
 import { describe } from "../components/Library";
 import { useLoad } from "../hooks";
 import { useNowPlaying } from "../nowPlaying";
+import { EnhancementControl, jobLabel, useEnhancement } from "../enhancement";
 import { R } from "../routes";
 import { Link } from "../router";
 import type { Resolved, StreamRef } from "../types";
@@ -17,6 +18,43 @@ export function WatchPage({ videoId, stream }: { videoId: string | null; stream?
   const video = videoId ? videos?.find((v) => v.id === videoId) : undefined;
   const site = useSiteEpisode(stream);
   const [pick, setPick] = useState(false);
+  const ai = useEnhancement();
+  const [prepared, setPrepared] = useState<{ key: string; url: string | null; message: string | null; failed: boolean } | null>(null);
+  const [retry, setRetry] = useState(0);
+  const sourceKey = JSON.stringify(stream ?? videoId);
+  const playbackKey = `${sourceKey}:${ai.data?.enabled}:${ai.data?.streaming}:${retry}`;
+  const originalUrl = stream ? site.ready?.url : video?.status === "ready" ? `/media/${encodeURIComponent(video.id)}` : null;
+  useEffect(() => {
+    if (!ai.data || !originalUrl) return;
+    if (!ai.data.enabled) {
+      setPrepared({ key: playbackKey, url: originalUrl, message: null, failed: false });
+      return;
+    }
+    let alive = true;
+    let timer: number | undefined;
+    let first = true;
+    setPrepared({ key: playbackKey, url: null, message: "Готовлю улучшенное видео…", failed: false });
+    const prepare = async () => {
+      try {
+        const source = stream ? { stream, title: site.name ?? "Серия" } : { videoId: videoId! };
+        const result = await api.prepareEnhanced(source, first && retry > 0);
+        first = false;
+        if (!alive) return;
+        const failed = result.job?.state === "failed" || result.job?.state === "cancelled";
+        setPrepared({ key: playbackKey, url: result.url, message: result.job ? jobLabel(result.job) : null, failed });
+        if (!result.url && !failed) timer = window.setTimeout(prepare, 2000);
+      } catch (e) {
+        if (alive) setPrepared({ key: playbackKey, url: null, message: e instanceof Error ? e.message : String(e), failed: true });
+      }
+    };
+    void prepare();
+    return () => { alive = false; window.clearTimeout(timer); };
+    // The stable key captures the source and playback options; polling metadata must not restart playback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playbackKey, originalUrl]);
+  const player = prepared?.key === playbackKey ? prepared : null;
+  const currentJob = ai.data?.jobs.find((job) => player?.url === `/enhanced/${job.id}.mp4`);
+  const message = player?.failed ? player.message : currentJob ? jobLabel(currentJob) : player?.message;
 
   const heading = stream ? (site.name ?? "Загружаю…") : (video?.title ?? (videoId ? "Видео не найдено" : "Выберите видео из библиотеки"));
 
@@ -42,15 +80,17 @@ export function WatchPage({ videoId, stream }: { videoId: string | null; stream?
         </Link>
       </div>
       <div className="phone__body">
+        <EnhancementControl />
         <div className="player">
-          {stream && site.ready ? (
-            <video key={site.ready.url} src={site.ready.url} controls autoPlay playsInline />
-          ) : !stream && video?.status === "ready" ? (
-            <video key={video.id} src={`/media/${encodeURIComponent(video.id)}`} controls autoPlay playsInline />
+          {player?.url ? (
+            <video key={player.url} src={player.url} controls autoPlay playsInline
+              onError={() => setPrepared({ ...player, failed: true, message: "Плеер не смог открыть видео. Для ИИ-потока попробуйте полную обработку." })} />
           ) : (
             <div className="art art--a" />
           )}
         </div>
+        {message && <p className={player?.failed ? "video__error" : "small muted"} role="status">{message}</p>}
+        {player?.failed && <button className="btn btn--small" onClick={() => setRetry((value) => value + 1)}>Повторить обработку</button>}
         <div>
           <p className="label" style={{ fontSize: ".72rem" }}>
             {stream

@@ -5,6 +5,7 @@ import { PlaybackQueue } from "../components/PlaybackQueue";
 import { PlaybackTimeline } from "../components/PlaybackTimeline";
 import { TvScreen } from "../components/TvScreen";
 import { useNowPlaying } from "../nowPlaying";
+import { EnhancementControl } from "../enhancement";
 import { STATE_LABEL, useRemote } from "../remote";
 import { R } from "../routes";
 import { Link, useRouter } from "../router";
@@ -46,6 +47,7 @@ function Remote({ tvId }: { tvId: string }) {
         </Link>
       </div>
       <div className="phone__body">
+        <EnhancementControl />
         <TvScreen on={online}>
           <div className="screen-content">
             <span className="screen-content__state">{info && !online ? "Не в сети" : STATE_LABEL[r.state]}</span>

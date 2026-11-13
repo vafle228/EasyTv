@@ -45,7 +45,7 @@ export function useRemote(tvId: string) {
   const active = state === "playing" || state === "paused" || state === "transitioning";
   const position = playback.data?.positionS ?? null;
   const duration = playback.data?.durationS ?? null;
-  const canSeek = !playback.error && (state === "playing" || state === "paused");
+  const canSeek = !playback.error && playback.data?.seekable !== false && (state === "playing" || state === "paused");
   const current: Video | undefined = videos.data?.find((v) => v.id === playback.data?.videoId);
   const title = current?.title ?? playback.data?.title ?? null;
   const nextItem = queue.data?.items[0];
@@ -54,7 +54,7 @@ export function useRemote(tvId: string) {
     tv,
     videos,
     queue,
-    error,
+    error: error ?? playback.data?.error ?? null,
     setError,
     busy,
     run,
