@@ -66,6 +66,41 @@ def test_completed_cache_survives_restart_and_active_reader_is_not_evicted(tmp_p
     assert not path.exists()
 
 
+def test_repeated_play_requests_allow_background_cleanup_to_finish(tmp_path):
+    async def scenario():
+        started, cleaning, released, foreground = (asyncio.Event() for _ in range(4))
+        async def runner(job_id, source):
+            if source["file"] == "later":
+                started.set()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    cleaning.set()
+                    await released.wait()
+                    raise
+            foreground.set()
+            await asyncio.Event().wait()
+
+        manager = Jobs(tmp_path, 1000, runner)
+        manager.submit("later", {"file": "later"}, 1)
+        task = asyncio.create_task(manager.serve())
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            manager.submit("now", {"file": "now"}, 0)
+            await asyncio.wait_for(cleaning.wait(), 1)
+            manager.submit("now", {"file": "now"}, 0)
+            manager.cancel_background_except(set())
+            assert manager.current.cancelling() == 1
+            assert not foreground.is_set()
+            released.set()
+            await asyncio.wait_for(foreground.wait(), 1)
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+    asyncio.run(scenario())
+
+
 def test_worker_checks_sources_ranges_and_missing_jobs(tmp_path, monkeypatch):
     root = tmp_path / "input"
     root.mkdir()

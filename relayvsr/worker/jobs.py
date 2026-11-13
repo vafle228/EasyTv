@@ -6,12 +6,11 @@ import asyncio
 import contextlib
 import hashlib
 import json
-import os
-import signal
 import struct
-import sys
 import time
 from pathlib import Path
+
+from .runtime import InferenceProcess
 
 MODEL_VERSION = "e856773350f53036d825404c9ea9228e6dffadca-v1"
 TERMINAL = {"ready", "failed", "cancelled"}
@@ -47,6 +46,7 @@ class Jobs:
         self.cache = cache
         self.limit_bytes = limit_bytes
         self.runner = runner or self._infer
+        self.runtime = InferenceProcess()
         self.items = {}
         self.sources = {}
         self.readers = {}
@@ -105,7 +105,7 @@ class Jobs:
         # An immediate play takes the GPU from precomputation; never interrupt a live reader.
         if priority == 0 and self.active and self.active != job_id and self.current:
             active = self.items[self.active]
-            if active["priority"] > 0 and not self.readers.get(self.active):
+            if active["priority"] > 0 and not self.readers.get(self.active) and not self.current.cancelling():
                 self.current.cancel()
 
     def cancel_background_except(self, keys):
@@ -113,7 +113,7 @@ class Jobs:
             if item["priority"] > 0 and item["key"] not in keys and item["state"] not in TERMINAL:
                 item["state"] = "cancelled"
                 self.sources.pop(job_id, None)
-                if job_id == self.active and self.current:
+                if job_id == self.active and self.current and not self.current.cancelling():
                     self.current.cancel()
 
     def cleanup(self):
@@ -154,7 +154,7 @@ class Jobs:
                     if item["state"] != "cancelled":
                         item.update(state="pending", frames=0, progress=0)
                 except Exception:
-                    item.update(state="failed", error="Сервис RelayVSR не смог завершить обработку")
+                    item.update(state="failed", error=item["error"] or "Сервис RelayVSR не смог завершить обработку")
                 finally:
                     self.current = None
                     self.active = None
@@ -171,36 +171,16 @@ class Jobs:
                 self.current.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await self.current
+            await self.runtime.close()
 
     async def _infer(self, job_id, source):
-        process = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "worker.inference", stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, start_new_session=True,
-        )
-        try:
-            process.stdin.write(json.dumps({"source": source, "output": str(self.path(job_id))}).encode())
-            await process.stdin.drain()
-            process.stdin.close()
-            async for line in process.stdout:
-                try:
-                    update = json.loads(line)
-                except ValueError:
-                    continue
-                self.items[job_id].update(update)
-                self.cleanup()
-                if self.path(job_id).exists() and self.path(job_id).stat().st_size > self.limit_bytes:
-                    self.items[job_id].update(state="failed", error="Видео превысило лимит дискового кэша RelayVSR")
-                    return
-            code = await process.wait()
-            if code and self.items[job_id]["state"] != "failed":
-                self.items[job_id].update(state="failed", error=f"Процесс RelayVSR завершился с кодом {code}")
-        finally:
-            if process.returncode is None:
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    await asyncio.wait_for(process.wait(), 10)
-                except TimeoutError:
-                    with contextlib.suppress(ProcessLookupError):
-                        os.killpg(process.pid, signal.SIGKILL)
-                    await process.wait()
+        def update(values):
+            if self.current and self.current.cancelling():
+                return
+            self.items[job_id].update(values)
+            self.cleanup()
+            if self.path(job_id).exists() and self.path(job_id).stat().st_size > self.limit_bytes:
+                self.items[job_id].update(state="failed", error="Видео превысило лимит дискового кэша RelayVSR")
+                raise RuntimeError("Лимит дискового кэша")
+
+        await self.runtime.run({"source": source, "output": str(self.path(job_id))}, update)
