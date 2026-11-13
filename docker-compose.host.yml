@@ -7,3 +7,4 @@ services:
     ports: !reset []
     environment:
       EASYTV_PORT: ${EASYTV_PORT:-8080}
+      EASYTV_RELAYVSR_URL: ${EASYTV_RELAYVSR_URL:-http://127.0.0.1:8090}

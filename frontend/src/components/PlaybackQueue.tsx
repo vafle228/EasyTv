@@ -1,5 +1,6 @@
 import type { PlaybackQueue as Queue } from "../types";
 import { Icon } from "./Icons";
+import { jobLabel, useEnhancement } from "../enhancement";
 
 export function PlaybackQueue({
   queue,
@@ -12,6 +13,7 @@ export function PlaybackQueue({
   busy: boolean;
   onRemove: (itemId: string) => void;
 }) {
+  const ai = useEnhancement();
   return (
     <section className="card" aria-label="Очередь просмотра">
       <div className="section-head">
@@ -29,7 +31,16 @@ export function PlaybackQueue({
           {queue.items.map((item, index) => (
             <li key={item.id} className="row queue-item">
               <span className="muted small" aria-hidden="true">{index + 1}</span>
-              <span className="video__title grow" title={item.title}>{item.title}</span>
+              <span className="grow">
+                <span className="video__title" title={item.title}>{item.title}</span>
+                {ai.data?.enabled && (() => {
+                  const ref = item.stream;
+                  const key = item.videoId ? `video:${item.videoId}` : ref
+                    ? `stream:/stream/animego/${encodeURIComponent(ref.titleId)}/${ref.episode}/${encodeURIComponent(ref.translationId)}/${ref.provider ?? "auto"}.mp4` : "";
+                  const job = ai.data.jobs.find((value) => value.key === key);
+                  return <span className="video__meta">{job ? jobLabel(job) : "ИИ: подготовлю перед просмотром"}</span>;
+                })()}
+              </span>
               <button
                 className="icon-btn"
                 onClick={() => onRemove(item.id)}

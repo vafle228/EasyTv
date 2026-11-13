@@ -5,6 +5,7 @@ import { AddPage } from "./demo/AddPage";
 import { LivePage } from "./demo/LivePage";
 import { TorrentPage } from "./demo/TorrentPage";
 import { useNowPlaying } from "./nowPlaying";
+import { EnhancementControl } from "./enhancement";
 import { CatalogPage } from "./pages/CatalogPage";
 import { CinemaPage } from "./pages/CinemaPage";
 import { DownloadsPage } from "./pages/DownloadsPage";
@@ -22,6 +23,7 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <AppBar />
+      <EnhancementControl />
       {children}
       <TabBar />
     </div>

@@ -12,6 +12,9 @@ from .models import (
     Collection,
     DownloadResult,
     Episode,
+    EnhancementJob,
+    EnhancementSettings,
+    EnhancementSource,
     MediaItem,
     PlaybackInfo,
     QueueItem,
@@ -133,3 +136,15 @@ class Clock(Protocol):
 
 class IdGenerator(Protocol):
     def new_id(self) -> str: ...
+
+
+class EnhancementSettingsRepository(Protocol):
+    def get(self) -> EnhancementSettings: ...
+    def save(self, settings: EnhancementSettings) -> None: ...
+
+
+class VideoEnhancer(Protocol):
+    async def health(self) -> tuple[bool, str | None]: ...
+    async def jobs(self) -> list[EnhancementJob]: ...
+    async def submit(self, source: EnhancementSource, *, foreground: bool, retry: bool = False) -> EnhancementJob: ...
+    async def retain(self, keys: set[str]) -> None: ...

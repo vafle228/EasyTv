@@ -2,6 +2,8 @@ import type {
   CatalogTitle,
   Collection,
   Episode,
+  Enhancement,
+  EnhancementJob,
   Playback,
   PlaybackQueue,
   Resolved,
@@ -56,6 +58,13 @@ const titlePath = (id: string) => `/api/catalog/titles/${encodeURIComponent(id)}
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
 
 export const api = {
+  enhancement: () => request<Enhancement>("/api/enhancement"),
+  configureEnhancement: (enabled: boolean, streaming: boolean) =>
+    request<{ enabled: boolean; streaming: boolean }>("/api/enhancement", {
+      method: "PUT", body: JSON.stringify({ enabled, streaming }),
+    }),
+  prepareEnhanced: (source: { videoId: string } | { stream: StreamRef; title: string }, retry = false) =>
+    request<{ url: string | null; job: EnhancementJob | null }>("/api/enhancement/prepare", post({ ...source, retry })),
   tvs: () => request<Tv[]>("/api/tvs"),
   refreshTvs: () => request<Tv[]>("/api/tvs/refresh", { method: "POST" }),
   addTv: (address: string) => request<Tv>("/api/tvs", { method: "POST", body: JSON.stringify({ address }) }),

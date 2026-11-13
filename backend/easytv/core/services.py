@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from .errors import (
+    EnhancementPending,
     EasyTvError,
     InvalidDirectVideoUrl,
     InvalidVideoUrl,
@@ -57,6 +58,7 @@ from .ports import (
 
 if TYPE_CHECKING:
     from .catalog import CatalogService, CinemaService
+    from .enhancement import EnhancementService
 
 log = logging.getLogger(__name__)
 
@@ -360,6 +362,7 @@ class PlaybackService:
         cinema: CinemaService,
         queues: PlaybackQueueRepository,
         ids: IdGenerator,
+        enhancement: EnhancementService,
     ) -> None:
         self._tvs = tvs
         self._videos = videos
@@ -369,23 +372,79 @@ class PlaybackService:
         self._cinema = cinema
         self._queues = queues
         self._ids = ids
+        self._enhancement = enhancement
         self._locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._playing: dict[str, _Playing] = {}
         self._queue_errors: dict[str, str] = {}
+        self._preparing: dict[str, asyncio.Task] = {}
+        self._preparation_status: dict[str, PlaybackStatus] = {}
 
     async def play(self, tv_id: str, video_id: str) -> PlaybackStatus:
         async with self._locks[tv_id]:
             tv = self._tvs.get(tv_id).tv
-            return await self._play_video(tv, video_id)
+            await self._enhancement.retry_failed(video_id=video_id)
+            return await self._begin(
+                tv, lambda: self._play_video(tv, video_id),
+                PlaybackStatus(state=PlaybackState.TRANSITIONING, video_id=video_id, seekable=False),
+            )
 
     async def play_stream(
         self, tv_id: str, ref: StreamRef, title: str, translation: str | None = None
     ) -> PlaybackStatus:
         async with self._locks[tv_id]:
             tv = self._tvs.get(tv_id).tv
-            status = await self._play_stream(tv, ref, title)
-            self._cinema.started(ref, translation)
+            await self._enhancement.retry_failed(ref=ref, title=title)
+            async def start():
+                status = await self._play_stream(tv, ref, title)
+                self._cinema.started(ref, translation)
+                return status
+            return await self._begin(tv, start, PlaybackStatus(
+                state=PlaybackState.TRANSITIONING, title=title, stream=ref, seekable=False,
+            ))
+
+    async def _begin(self, tv, action, status):
+        previous = self._preparing.pop(tv.id, None)
+        if previous:
+            previous.cancel()
+        self._preparation_status.pop(tv.id, None)
+        try:
+            return await action()
+        except EnhancementPending:
+            self._preparation_status[tv.id] = status
+            self._preparing[tv.id] = asyncio.create_task(self._await_preparation(tv, action))
             return status
+
+    async def _await_preparation(self, tv, action):
+        try:
+            while True:
+                await asyncio.sleep(2)
+                async with self._locks[tv.id]:
+                    try:
+                        await action()
+                    except EnhancementPending:
+                        continue
+                    self._preparation_status.pop(tv.id, None)
+                    return
+        except EasyTvError as exc:
+            self._preparation_status[tv.id] = PlaybackStatus(state=PlaybackState.STOPPED, error=str(exc))
+        except Exception:
+            log.exception("Failed to start enhanced playback")
+            self._preparation_status[tv.id] = PlaybackStatus(
+                state=PlaybackState.STOPPED, error="Не удалось запустить улучшенное видео",
+            )
+        finally:
+            if self._preparing.get(tv.id) is asyncio.current_task():
+                self._preparing.pop(tv.id, None)
+
+    async def close(self):
+        tasks = list(self._preparing.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    def enhancement_queue(self):
+        # Limit speculative work; later entries become eligible as the queue advances.
+        return [item for tv in self._tvs.list() for item in self._queues.get(tv.tv.id)[:2]]
 
     def _ready_video(self, video_id: str) -> Video:
         video = self._videos.get(video_id)
@@ -395,14 +454,24 @@ class PlaybackService:
 
     async def _play_video(self, tv: Tv, video_id: str) -> PlaybackStatus:
         video = self._ready_video(video_id)
-        media = MediaItem(url=self._urls.url_for(video, tv), title=video.title, mime=video.mime)
-        return await self._start(tv, media, PlaybackStatus(state=PlaybackState.TRANSITIONING, video_id=video_id))
+        job = await self._enhancement.playback(video_id=video_id)
+        url = self._urls.url_for_path(job.path, tv) if job else self._urls.url_for(video, tv)
+        media = MediaItem(url=url, title=video.title, mime="video/mp4" if job else video.mime,
+                          seekable=not job or job.state == "ready")
+        return await self._start(tv, media, PlaybackStatus(
+            state=PlaybackState.TRANSITIONING, video_id=video_id,
+            enhancement_id=job.id if job else None, seekable=not job or job.state == "ready",
+        ))
 
     async def _play_stream(self, tv: Tv, ref: StreamRef, title: str) -> PlaybackStatus:
         # Resolve at playback time since the CDN link can expire while the episode waits in the queue.
-        await self._catalog.resolve(ref)
-        media = MediaItem(url=self._urls.url_for_path(ref.path, tv), title=title, mime="video/mp4")
-        status = PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref)
+        job = await self._enhancement.playback(ref=ref, title=title)
+        if not job:
+            await self._catalog.resolve(ref)
+        media = MediaItem(url=self._urls.url_for_path(job.path if job else ref.path, tv), title=title, mime="video/mp4",
+                          seekable=not job or job.state == "ready")
+        status = PlaybackStatus(state=PlaybackState.TRANSITIONING, title=title, stream=ref,
+                                enhancement_id=job.id if job else None, seekable=not job or job.state == "ready")
         return await self._start(tv, media, status)
 
     async def _start(self, tv: Tv, media: MediaItem, status: PlaybackStatus) -> PlaybackStatus:
@@ -450,16 +519,22 @@ class PlaybackService:
             items = self._queues.get(tv_id)
             if not items or items[0].id != item_id:
                 raise QueueChanged()
-            return await self._play_next(tv, items)
+            await self._enhancement.retry_failed(video_id=items[0].video_id, ref=items[0].stream, title=items[0].title)
+            return await self._begin(tv, lambda: self._play_next(tv, items), PlaybackStatus(
+                state=PlaybackState.TRANSITIONING, title=items[0].title, seekable=False,
+            ))
 
     async def _play_next(self, tv: Tv, items: tuple[QueueItem, ...]) -> PlaybackStatus:
         item = items[0]
+        current = self._queues.get(tv.id)
+        if not current or current[0].id != item.id:
+            raise QueueChanged()
         if item.stream is not None:
             status = await self._play_stream(tv, item.stream, item.title)
         else:
             assert item.video_id is not None
             status = await self._play_video(tv, item.video_id)
-        self._queues.save(tv.id, items[1:])
+        self._queues.save(tv.id, current[1:])
         self._queue_errors.pop(tv.id, None)
         if item.stream is not None:
             self._cinema.started(item.stream, item.translation)
@@ -480,7 +555,7 @@ class PlaybackService:
                     tv_id = view.tv.id
                     if (
                         view.online and tv_id in self._playing and tv_id not in pending
-                        and tv_id not in self._queue_errors and self._queues.get(tv_id)
+                        and tv_id not in self._queue_errors and tv_id not in self._preparing and self._queues.get(tv_id)
                     ):
                         pending[tv_id] = group.create_task(self._check_queue(view.tv))
                 await asyncio.sleep(1)
@@ -506,7 +581,9 @@ class PlaybackService:
             near_end = playing.near_end_at
             if near_end is not None and now - near_end <= _END_SAMPLE_MAX_AGE_S:
                 self._playing.pop(tv.id)
-                await self._play_next(tv, items)
+                await self._begin(tv, lambda: self._play_next(tv, items), PlaybackStatus(
+                    state=PlaybackState.TRANSITIONING, title=items[0].title, seekable=False,
+                ))
             elif now - playing.started_at > _PLAY_START_GRACE_S:
                 self._playing.pop(tv.id)
             return
@@ -541,6 +618,10 @@ class PlaybackService:
     async def seek(self, tv_id: str, seconds: int, *, relative: bool = False) -> None:
         tv = self._tvs.get(tv_id).tv
         async with self._locks[tv_id]:
+            playing = self._playing.get(tv_id)
+            if tv_id in self._preparing or (playing and playing.status.enhancement_id
+                    and not self._enhancement.complete(playing.status.enhancement_id)):
+                raise PlaybackNotSeekable("Перемотка улучшенного видео доступна после завершения обработки")
             info = await self._controller.info(tv)
             if info.state not in (PlaybackState.PLAYING, PlaybackState.PAUSED):
                 raise PlaybackNotSeekable("Перемотка доступна во время воспроизведения или паузы")
@@ -558,12 +639,19 @@ class PlaybackService:
     async def stop(self, tv_id: str) -> None:
         tv = self._tvs.get(tv_id).tv
         async with self._locks[tv_id]:
+            task = self._preparing.pop(tv_id, None)
+            if task:
+                task.cancel()
+            self._preparation_status.pop(tv_id, None)
             self._reset_end_sample(tv_id)
             await self._controller.stop(tv)
             self._playing.pop(tv_id, None)
 
     async def status(self, tv_id: str) -> PlaybackStatus:
         tv = self._tvs.get(tv_id).tv
+        preparation = self._preparation_status.get(tv_id)
+        if preparation and not preparation.error:
+            return preparation
         info = await self._controller.info(tv)
         playing = self._playing.get(tv_id)
         status = (
@@ -571,4 +659,6 @@ class PlaybackService:
             if playing and info.state not in _IDLE_STATES and info.track_uri in (None, playing.uri)
             else PlaybackStatus(state=info.state)
         )
-        return replace(status, state=info.state, position_s=info.position_s, duration_s=info.duration_s)
+        seekable = not status.enhancement_id or self._enhancement.complete(status.enhancement_id)
+        return replace(status, state=info.state, position_s=info.position_s, duration_s=info.duration_s,
+                       seekable=seekable, error=preparation.error if preparation else status.error)

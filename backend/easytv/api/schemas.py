@@ -103,6 +103,9 @@ class PlaybackDto(Dto):
     duration_s: int | None
     title: str | None = None
     stream: StreamRefDto | None = None
+    enhanced: bool = False
+    seekable: bool = True
+    error: str | None = None
 
     @classmethod
     def of(cls, s: PlaybackStatus) -> PlaybackDto:
@@ -113,6 +116,9 @@ class PlaybackDto(Dto):
             duration_s=s.duration_s,
             title=s.title,
             stream=StreamRefDto.of(s.stream) if s.stream else None,
+            enhanced=s.enhancement_id is not None,
+            seekable=s.seekable,
+            error=s.error,
         )
 
 
