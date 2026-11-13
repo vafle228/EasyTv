@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from .errors import EnhancementPending, EnhancementUnavailable, EasyTvError, VideoNotReady
+from .errors import EnhancementNotNeeded, EnhancementPending, EnhancementUnavailable, EasyTvError, VideoNotReady
 from .models import EnhancementJob, EnhancementSettings, EnhancementSource, StreamRef, VideoStatus
 from .ports import EnhancementSettingsRepository, VideoEnhancer
 
@@ -17,12 +17,17 @@ class EnhancementService:
         self.worker, self.settings, self.library, self.catalog = worker, settings, library, catalog
         self.jobs: dict[str, EnhancementJob] = {}
         self.titles: dict[str, str] = {}
+        self.notices: dict[str, str] = {}
         self.error: str | None = None
         self._lock = asyncio.Lock()
 
     @staticmethod
     def key(video_id: str | None, ref: StreamRef | None) -> str:
-        return f"video:{video_id}" if video_id else f"stream:{ref.path}"
+        source = f"video:{video_id}" if video_id else f"stream:{ref.path}"
+        return f"{source}:fullhd-v1"
+
+    def notice(self, video_id=None, ref=None):
+        return self.notices.get(self.key(video_id, ref)) if self.settings.get().enabled else None
 
     async def configure(self, enabled: bool, streaming: bool):
         async with self._lock:
@@ -39,13 +44,17 @@ class EnhancementService:
 
     async def refresh(self):
         jobs = await self.worker.jobs()
-        self.jobs = {job.key: job for job in jobs}
+        self.jobs = {job.key: job for job in jobs if job.key.endswith(":fullhd-v1")}
 
     async def prepare(self, *, video_id=None, ref=None, title=None, foreground=False, retry=False):
         async with self._lock:
             if not self.settings.get().enabled:
                 return None
             key = self.key(video_id, ref)
+            if retry:
+                self.notices.pop(key, None)
+            elif key in self.notices:
+                return None
             await self.refresh()
             existing = self.jobs.get(key)
             if existing and existing.state not in {"failed", "cancelled"}:
@@ -65,7 +74,11 @@ class EnhancementService:
             else:
                 stream = await self.catalog.resolve(ref)
                 source = EnhancementSource(key=key, url=stream.url, headers=stream.headers)
-            job = await self.worker.submit(source, foreground=foreground, retry=retry)
+            try:
+                job = await self.worker.submit(source, foreground=foreground, retry=retry)
+            except EnhancementNotNeeded as exc:
+                self.notices[key] = str(exc)
+                return None
             self.jobs[key] = job
             self.titles[key] = title or key
             return job

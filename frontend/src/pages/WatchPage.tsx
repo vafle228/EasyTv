@@ -41,7 +41,7 @@ export function WatchPage({ videoId, stream }: { videoId: string | null; stream?
         first = false;
         if (!alive) return;
         const failed = result.job?.state === "failed" || result.job?.state === "cancelled";
-        setPrepared({ key: playbackKey, url: result.url, message: result.job ? jobLabel(result.job) : null, failed });
+        setPrepared({ key: playbackKey, url: result.url, message: result.notice ?? (result.job ? jobLabel(result.job) : null), failed });
         if (!result.url && !failed) timer = window.setTimeout(prepare, 2000);
       } catch (e) {
         if (alive) setPrepared({ key: playbackKey, url: null, message: e instanceof Error ? e.message : String(e), failed: true });

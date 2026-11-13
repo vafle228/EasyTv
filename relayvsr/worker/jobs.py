@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .runtime import InferenceProcess
 
-MODEL_VERSION = "e856773350f53036d825404c9ea9228e6dffadca-v1"
+MODEL_VERSION = "e856773350f53036d825404c9ea9228e6dffadca-fullhd-v1"
 TERMINAL = {"ready", "failed", "cancelled"}
 
 

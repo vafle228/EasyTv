@@ -103,6 +103,7 @@ class PlaybackStatus:
     title: str | None = None
     stream: StreamRef | None = None
     enhancement_id: str | None = None
+    enhancement_notice: str | None = None
     seekable: bool = True
     error: str | None = None
 

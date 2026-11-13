@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 from easytv.api.app import create_app
 from easytv.config import Settings
 from easytv.container import build_container
-from easytv.core.models import EnhancementJob, EnhancementSettings
+from easytv.core.errors import EnhancementNotNeeded, EnhancementUnavailable
+from easytv.core.models import EnhancementJob, EnhancementSettings, EnhancementSource
 from easytv.infrastructure.enhancement import JsonEnhancementSettings, RelayVsrClient
 
 from test_scenarios import FakeController, FakeDiscovery, FakeDownloader, FakeLocator
@@ -26,6 +27,7 @@ class FakeEnhancer:
         self.requests = []
         self.retained = set()
         self.next_state = "pending"
+        self.rejection = None
 
     async def health(self):
         return self.available, None if self.available else "CUDA недоступна"
@@ -35,6 +37,8 @@ class FakeEnhancer:
 
     async def submit(self, source, *, foreground, retry=False):
         self.requests.append((source, foreground, retry))
+        if self.rejection:
+            raise self.rejection
         job = self.items.get(source.key)
         if job is None or retry:
             job = EnhancementJob(id=f"{len(self.items) + 1:064x}", key=source.key, state=self.next_state,
@@ -216,3 +220,69 @@ def test_manual_tv_retry_restarts_failure_but_polling_does_not(ai_env):
     assert client.post(f"{TV}/play", json={"videoId": video}).status_code == 200
     assert worker.requests[-1][2] is True
     assert len(controller.commands) == 1
+
+
+@pytest.mark.parametrize("dimensions", [(1920, 1080), (2560, 1440), (3840, 2160)])
+def test_full_hd_plays_original_with_notice_in_browser_tv_and_queue(ai_env, dimensions):
+    client, container, worker, controller, video = ai_env
+    enable(client)
+    worker.rejection = EnhancementNotNeeded(*dimensions)
+    body = {"videoId": video}
+    prepared = client.post("/api/enhancement/prepare", json=body).json()
+    assert prepared["url"] == f"/media/{video}" and prepared["job"] is None
+    assert f"{dimensions[0]}×{dimensions[1]}" in prepared["notice"]
+    assert client.post("/api/enhancement/prepare", json=body).json() == prepared
+    playback = client.post(f"{TV}/play", json=body).json()
+    assert not playback["enhanced"] and playback["seekable"] and playback["error"] is None
+    assert playback["enhancementNotice"] == prepared["notice"]
+    assert "/media/" in controller.commands[0][2].url
+    status = client.get("/api/enhancement").json()
+    assert status["jobs"] == []
+    assert status["notices"][container.enhancement.key(video, None)] == prepared["notice"]
+    assert len(worker.requests) == 1  # polling/prefetch must not repeatedly probe a skipped source
+    client.post(f"{TV}/queue", json=body)
+    queued = client.get(f"{TV}/queue").json()["items"][0]
+    assert client.post(f"{TV}/next", json={"itemId": queued["id"]}).json()["enhancementNotice"]
+    assert not client.get(f"{TV}/queue").json()["items"]
+    assert len(worker.requests) == 1 and "/media/" in controller.commands[-1][2].url
+    client.put("/api/enhancement", json={"enabled": False})
+    assert client.post("/api/enhancement/prepare", json=body).json()["notice"] is None
+
+
+def test_full_hd_catalog_stream_plays_original_and_retry_rechecks_source(ai_env):
+    client, _, worker, controller, _ = ai_env
+    enable(client)
+    worker.rejection = EnhancementNotNeeded(1920, 1080)
+    stream = {"titleId": FRIREN, "episode": 1, "translationId": "81"}
+    body = {"stream": stream, "title": "Серия 1"}
+    prepared = client.post("/api/enhancement/prepare", json=body).json()
+    assert prepared["url"].startswith("/stream/") and prepared["notice"]
+    worker.rejection = None
+    worker.next_state = "ready"
+    retried = client.post("/api/enhancement/prepare", json={**body, "retry": True}).json()
+    assert retried["url"].startswith("/enhanced/") and retried["notice"] is None
+
+
+def test_old_native_x4_cache_is_not_reused(ai_env):
+    client, _, worker, _, video = ai_env
+    old_key = f"video:{video}"
+    worker.items[old_key] = EnhancementJob(id="a" * 64, key=old_key, state="ready")
+    enable(client)
+    result = client.post("/api/enhancement/prepare", json={"videoId": video}).json()
+    assert result["url"] is None and result["job"]["state"] == "pending"
+    assert result["job"]["id"] != "a" * 64
+    assert len(client.get("/api/enhancement").json()["jobs"]) == 1
+
+
+def test_worker_rejection_is_distinguished_from_probe_failure():
+    import asyncio
+    async def scenario():
+        response = httpx.Response(409, json={"detail": {"code": "already_full_hd", "width": 1920, "height": 1080}})
+        worker = RelayVsrClient("http://worker", httpx.MockTransport(lambda _: response))
+        with pytest.raises(EnhancementNotNeeded, match="1920×1080"):
+            await worker.submit(EnhancementSource(key="clip", file="clip.mp4"), foreground=True)
+        for response in (httpx.Response(503, json={"detail": "private source address"}),
+                         httpx.Response(409, json={"detail": {"code": "already_full_hd"}})):
+            with pytest.raises(EnhancementUnavailable, match="не отвечает"):
+                await worker.submit(EnhancementSource(key="clip", file="clip.mp4"), foreground=True)
+    asyncio.run(scenario())

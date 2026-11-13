@@ -7,7 +7,7 @@ from pathlib import Path
 
 import httpx
 
-from easytv.core.errors import EnhancementUnavailable
+from easytv.core.errors import EnhancementNotNeeded, EnhancementUnavailable
 from easytv.core.models import EnhancementJob, EnhancementSettings, EnhancementSource
 
 
@@ -43,6 +43,13 @@ class RelayVsrClient:
         try:
             async with httpx.AsyncClient(base_url=self.url, timeout=20, transport=self.transport) as client:
                 response = await client.request(method, path, **kwargs)
+                if path == "/jobs" and method == "POST" and response.status_code == 409:
+                    payload = response.json()
+                    detail = payload.get("detail") if isinstance(payload, dict) else None
+                    if isinstance(detail, dict) and detail.get("code") == "already_full_hd":
+                        width, height = detail.get("width"), detail.get("height")
+                        if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+                            raise EnhancementNotNeeded(width, height)
                 response.raise_for_status()
                 return response.json() if response.status_code != 204 else None
         except (httpx.HTTPError, ValueError):

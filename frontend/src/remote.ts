@@ -55,6 +55,7 @@ export function useRemote(tvId: string) {
     videos,
     queue,
     error: error ?? playback.data?.error ?? null,
+    enhancementNotice: playback.data?.enhancementNotice,
     setError,
     busy,
     run,

@@ -37,8 +37,8 @@ export function PlaybackQueue({
                   const ref = item.stream;
                   const key = item.videoId ? `video:${item.videoId}` : ref
                     ? `stream:/stream/animego/${encodeURIComponent(ref.titleId)}/${ref.episode}/${encodeURIComponent(ref.translationId)}/${ref.provider ?? "auto"}.mp4` : "";
-                  const job = ai.data.jobs.find((value) => value.key === key);
-                  return <span className="video__meta">{job ? jobLabel(job) : "ИИ: подготовлю перед просмотром"}</span>;
+                  const job = ai.data.jobs.find((value) => value.key === `${key}:fullhd-v1`);
+                  return <span className="video__meta">{ai.data.notices[`${key}:fullhd-v1`] ?? (job ? jobLabel(job) : "ИИ: подготовлю перед просмотром")}</span>;
                 })()}
               </span>
               <button

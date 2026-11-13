@@ -48,7 +48,7 @@ export function EnhancementControl() {
   return (
     <section className="ai-control" aria-label="ИИ улучшение видео">
       <label className="ai-control__toggle">
-        <span><strong>ИИ улучшение</strong><small className="muted">RelayVSR · увеличение в 4 раза</small></span>
+        <span><strong>ИИ улучшение</strong><small className="muted">До 1080p · RelayVSR</small></span>
         <input type="checkbox" role="switch" checked={data?.enabled ?? false}
           disabled={busy || !data || (!data.enabled && !data.available)}
           onChange={(e) => void configure(e.target.checked, data?.streaming ?? true)} />
@@ -69,6 +69,7 @@ export function EnhancementControl() {
             </label>
           </div>
         </fieldset>
+        <p className="small muted">144p, 240p, 360p, 480p, 720p и другие разрешения ниже Full HD улучшаются до 1080p с сохранением пропорций. Для 1080p и выше используется оригинал.</p>
         <p className="small muted">Следующие видео из очереди готовятся заранее. Настройка общая; на ТВ действует при новом запуске.</p>
         {data.streaming && <p className="small muted">В потоке возможны паузы; перемотка доступна после обработки. Если ТВ не запускает видео, выберите полную обработку.</p>}
       </>}

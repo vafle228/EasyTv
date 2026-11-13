@@ -51,6 +51,7 @@ export function TvPage({ tvId }: { tvId: string }) {
             </div>
           </TvScreen>
 
+          {r.enhancementNotice && <p className="small muted" role="status">{r.enhancementNotice}</p>}
           <PlaybackTimeline
             position={r.position}
             duration={r.duration}

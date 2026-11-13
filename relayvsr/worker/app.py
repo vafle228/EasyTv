@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 from starlette.background import BackgroundTask
 
 from .jobs import Jobs, TERMINAL
+from .resolution import AlreadyFullHD, inspect_source
 
 
 class Source(BaseModel):
@@ -49,7 +50,7 @@ class Retain(BaseModel):
     keys: list[str]
 
 
-def create_app(jobs=None, health=None):
+def create_app(jobs=None, health=None, probe=inspect_source):
     @asynccontextmanager
     async def lifespan(app):
         app.state.jobs = jobs or Jobs(Path(os.environ.get("RELAYVSR_CACHE", "/cache")),
@@ -83,8 +84,16 @@ def create_app(jobs=None, health=None):
 
     @app.post("/jobs", status_code=202)
     async def submit(body: Submit):
+        source = body.source.model_dump(exclude_none=True)
         try:
-            return app.state.jobs.submit(body.key, body.source.model_dump(exclude_none=True), body.priority, body.retry)
+            await asyncio.to_thread(probe, source)
+        except AlreadyFullHD as exc:
+            raise HTTPException(409, {"code": "already_full_hd", "width": exc.width, "height": exc.height}) from None
+        except Exception:
+            # Never expose expiring URLs, source headers or filesystem paths in errors.
+            raise HTTPException(503, "Не удалось определить разрешение исходника") from None
+        try:
+            return app.state.jobs.submit(body.key, source, body.priority, body.retry)
         except ValueError as exc:
             raise HTTPException(429, str(exc)) from None
 
