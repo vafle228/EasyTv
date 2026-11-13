@@ -1,0 +1,235 @@
+[
+  {
+    "name": "details1080_b9",
+    "exit_code": 0,
+    "elapsed_s": 235.74699472199973,
+    "gpu_total_peak_gib": 11.248046875,
+    "torch_allocated_peak_gib": 8.568694114685059,
+    "torch_reserved_peak_gib": 9.65625,
+    "process_rss_peak_gib": 9.191600799560547,
+    "container_peak_gib": 10.339313507080078,
+    "swap_peak_bytes": 0,
+    "width": 1916,
+    "height": 1080,
+    "frames": 48,
+    "video_seconds": 2.002002002002002,
+    "processing_fps": 0.20360810985778677,
+    "realtime_ratio": 0.008492163407481932,
+    "episode_estimate_hours": 80.21966675899253,
+    "phases_s": {
+      "vae_encode": [
+        24.45,
+        23.29
+      ],
+      "dit": [
+        36.97,
+        21.8
+      ],
+      "vae_decode": [
+        54.63,
+        55.5
+      ],
+      "postprocess": [
+        1.52,
+        1.09
+      ]
+    }
+  },
+  {
+    "name": "details1080_compile_vae",
+    "exit_code": 1,
+    "elapsed_s": 13.81361370599916,
+    "gpu_total_peak_gib": 2.658203125,
+    "torch_allocated_peak_gib": 0.9952983856201172,
+    "torch_reserved_peak_gib": 1.01171875,
+    "process_rss_peak_gib": 2.1750144958496094,
+    "container_peak_gib": 3.479022979736328,
+    "swap_peak_bytes": 0,
+    "phases_s": {
+      "vae_encode": [],
+      "dit": [],
+      "vae_decode": [],
+      "postprocess": []
+    }
+  },
+  {
+    "name": "details1080_compile_vae2",
+    "exit_code": 0,
+    "elapsed_s": 756.3499380380017,
+    "gpu_total_peak_gib": 11.4658203125,
+    "torch_allocated_peak_gib": 8.697807312011719,
+    "torch_reserved_peak_gib": 9.9296875,
+    "process_rss_peak_gib": 10.736801147460938,
+    "container_peak_gib": 12.976409912109375,
+    "swap_peak_bytes": 0,
+    "width": 1916,
+    "height": 1080,
+    "frames": 48,
+    "video_seconds": 2.002002002002002,
+    "processing_fps": 0.06346268781949488,
+    "realtime_ratio": 0.0026469255847303506,
+    "episode_estimate_hours": 257.36972831463663,
+    "phases_s": {
+      "vae_encode": [
+        437.13,
+        20.68
+      ],
+      "dit": [
+        36.88,
+        22.77
+      ],
+      "vae_decode": [
+        150.12,
+        50.55
+      ],
+      "postprocess": [
+        1.63,
+        1.12
+      ]
+    }
+  },
+  {
+    "name": "faces1080",
+    "exit_code": 0,
+    "elapsed_s": 507.1826194609994,
+    "gpu_total_peak_gib": 10.0654296875,
+    "torch_allocated_peak_gib": 7.38974666595459,
+    "torch_reserved_peak_gib": 8.634765625,
+    "process_rss_peak_gib": 9.280166625976562,
+    "container_peak_gib": 10.359603881835938,
+    "swap_peak_bytes": 0,
+    "width": 1916,
+    "height": 1080,
+    "frames": 96,
+    "video_seconds": 4.004004004004004,
+    "processing_fps": 0.18928093415744912,
+    "realtime_ratio": 0.007894600190083798,
+    "episode_estimate_hours": 86.29170600264177,
+    "phases_s": {
+      "vae_encode": [
+        27.92,
+        25.92,
+        24.98,
+        25.93
+      ],
+      "dit": [
+        45.84,
+        27.66,
+        27.39,
+        27.55
+      ],
+      "vae_decode": [
+        59.29,
+        59.49,
+        59.06,
+        59.06
+      ],
+      "postprocess": [
+        6.1,
+        1.1,
+        1.19,
+        1.17
+      ]
+    }
+  },
+  {
+    "name": "faces1440",
+    "exit_code": 0,
+    "elapsed_s": 242.59938317300112,
+    "gpu_total_peak_gib": 9.4072265625,
+    "torch_allocated_peak_gib": 7.5822834968566895,
+    "torch_reserved_peak_gib": 7.783203125,
+    "process_rss_peak_gib": 8.314926147460938,
+    "container_peak_gib": 9.171314239501953,
+    "swap_peak_bytes": 0,
+    "width": 2556,
+    "height": 1440,
+    "frames": 24,
+    "video_seconds": 1.001001001001001,
+    "processing_fps": 0.09892852853168738,
+    "realtime_ratio": 0.0041261481703239655,
+    "episode_estimate_hours": 165.10277636433582,
+    "phases_s": {
+      "vae_encode": [
+        48.92
+      ],
+      "dit": [
+        61.61
+      ],
+      "vae_decode": [
+        112.27
+      ],
+      "postprocess": [
+        1.61
+      ]
+    }
+  },
+  {
+    "name": "motion1080_b9",
+    "exit_code": 0,
+    "elapsed_s": 236.42116983099913,
+    "gpu_total_peak_gib": 11.345703125,
+    "torch_allocated_peak_gib": 8.568694114685059,
+    "torch_reserved_peak_gib": 9.65625,
+    "process_rss_peak_gib": 9.258670806884766,
+    "container_peak_gib": 10.366546630859375,
+    "swap_peak_bytes": 0,
+    "width": 1916,
+    "height": 1080,
+    "frames": 48,
+    "video_seconds": 2.002002002002002,
+    "processing_fps": 0.2030275039849935,
+    "realtime_ratio": 0.008467947279988052,
+    "episode_estimate_hours": 80.44907414823588,
+    "phases_s": {
+      "vae_encode": [
+        25.02,
+        24.23
+      ],
+      "dit": [
+        34.76,
+        22.15
+      ],
+      "vae_decode": [
+        55.79,
+        55.74
+      ],
+      "postprocess": [
+        0.62,
+        1.1
+      ]
+    }
+  },
+  {
+    "name": "pilot1080",
+    "exit_code": 0,
+    "elapsed_s": 105.50994182800059,
+    "gpu_total_peak_gib": 7.7734375,
+    "torch_allocated_peak_gib": 6.172527313232422,
+    "torch_reserved_peak_gib": 6.41015625,
+    "process_rss_peak_gib": 7.4498443603515625,
+    "container_peak_gib": 8.02939224243164,
+    "swap_peak_bytes": 0,
+    "width": 1916,
+    "height": 1080,
+    "frames": 9,
+    "video_seconds": 0.37537537537537535,
+    "processing_fps": 0.08530001859608219,
+    "realtime_ratio": 0.0035577251666700943,
+    "episode_estimate_hours": 191.48149075515192,
+    "phases_s": {
+      "vae_encode": [
+        20.41
+      ],
+      "dit": [
+        35.19
+      ],
+      "vae_decode": [
+        22.21
+      ],
+      "postprocess": [
+        1.09
+      ]
+    }
+  }
+]

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сравнение SeedVR2 и RelayVSR</title>
+<style>body{background:#101319;color:#e7ebf2;font:16px system-ui;margin:24px auto;max-width:1800px;padding:0 20px}h1{font-size:28px}h2{font-size:19px}p{color:#b7c3d3;line-height:1.5}button,select{font:inherit;padding:10px 12px;background:#25354d;color:white;border:1px solid #50617a;border-radius:8px;margin-right:8px;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}video{width:100%;background:black}a{color:#98c5ff}label{display:inline-block;margin:10px 16px 10px 0}.status{font-variant-numeric:tabular-nums}img{max-width:100%;height:auto}@media(max-width:750px){.grid{grid-template-columns:1fr}}</style>
+<h1>Исходник 852×480 · сравнение моделей</h1>
+<p>SeedVR2 восстанавливает исходные 480p. Для RelayVSR исходник сначала уменьшен до 479×270, затем увеличен моделью ×4 до 1916×1080. Lanczos — обычное увеличение исходных 480p. Тестовые вырезки без звука.</p>
+<label>Сцена <select id="scene"><option value="faces">Лицо · 03:00 · 1080p</option><option value="details">Детали и титры · 10:00 · 1080p</option><option value="motion">Движение · 25:00 · 1080p</option><option value="qhd">Лицо · 03:00 · 1440p</option></select></label>
+<label>Сравнение <select id="pair"><option value="seed">Lanczos / SeedVR2</option><option value="relay">Lanczos / RelayVSR из 270p</option><option value="models">SeedVR2 / RelayVSR из 270p</option></select></label>
+<p><button id="play">Воспроизвести вместе</button><button id="pause">Пауза</button><button id="restart">Сначала</button><label>Скорость <select id="rate"><option value="1">1×</option><option value="0.5">0,5×</option><option value="0.25">0,25×</option></select></label> <span id="status" class="status"></span></p>
+<div class="grid"><section><h2 id="leftTitle">Lanczos</h2><video id="before" muted playsinline controls></video><a id="beforeLink">Открыть левое видео полностью</a></section><section><h2 id="rightTitle">SeedVR2-3B FP8</h2><video id="after" muted playsinline controls></video><a id="afterLink">Открыть правое видео полностью</a></section></div>
+<p>Для оценки мелких деталей откройте видео отдельно в полном размере. Нет качественного оригинала для сверки: резкость не доказывает точность восстановленных деталей. Ширина сохранена близко к пропорциям исходника; 1440p здесь — 2556×1440.</p>
+<script>
+const $=id=>document.getElementById(id);
+const before=$('before'),after=$('after'),scene=$('scene'),pair=$('pair'),rate=$('rate');
+const map={faces:['faces-lanczos.mp4','faces1080.mp4','relay_faces1080.mp4'],details:['details-lanczos.mp4','details1080_b9.mp4','relay_details1080.mp4'],motion:['motion-lanczos.mp4','motion1080_b9.mp4','relay_motion1080.mp4'],qhd:['qhd-lanczos.mp4','faces1440.mp4']};
+function load(){before.pause();after.pause();pair.disabled=scene.value==='qhd';if(pair.disabled)pair.value='seed';const files=map[scene.value],ids=pair.value==='models'?[1,2]:pair.value==='relay'?[0,2]:[0,1],names=['Lanczos из 480p','SeedVR2-3B FP8 из 480p','RelayVSR из 270p'];before.src=files[ids[0]];after.src=files[ids[1]];$('beforeLink').href=before.src;$('afterLink').href=after.src;$('leftTitle').textContent=names[ids[0]];$('rightTitle').textContent=names[ids[1]];before.playbackRate=after.playbackRate=Number(rate.value)}
+scene.onchange=pair.onchange=load;
+$('play').onclick=()=>{after.currentTime=before.currentTime;Promise.all([before.play(),after.play()]).catch(e=>$('status').textContent=e.message)};
+$('pause').onclick=()=>{before.pause();after.pause()};
+$('restart').onclick=()=>{before.currentTime=after.currentTime=0};
+rate.onchange=()=>{before.playbackRate=after.playbackRate=Number(rate.value)};
+before.onseeked=()=>{if(Math.abs(before.currentTime-after.currentTime)>.05)after.currentTime=before.currentTime};
+function tick(){$('status').textContent=before.error||after.error?'Видео ещё не готово или не удалось открыть':before.currentTime.toFixed(2)+' c';if(!before.paused&&!after.paused&&Math.abs(before.currentTime-after.currentTime)>.08)after.currentTime=before.currentTime;requestAnimationFrame(tick)}load();tick();
+</script></html>
