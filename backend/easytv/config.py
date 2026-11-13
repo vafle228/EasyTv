@@ -28,6 +28,7 @@ class Settings:
     scan_subnets: list[str] = field(default_factory=list)
     max_video_height: int = 1080
     animego_url: str = "https://animego.me"
+    relayvsr_url: str | None = None
 
     @property
     def seeds(self) -> list[str]:
@@ -56,4 +57,5 @@ class Settings:
             scan_subnets=_list(env("EASYTV_SCAN_SUBNETS")),
             max_video_height=int(env("EASYTV_MAX_VIDEO_HEIGHT", "1080")),
             animego_url=env("EASYTV_ANIMEGO_URL", "https://animego.me"),
+            relayvsr_url=env("EASYTV_RELAYVSR_URL") or None,
         )

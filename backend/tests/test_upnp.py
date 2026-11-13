@@ -4,7 +4,7 @@ from functools import partial
 
 import httpx
 
-from easytv.core.models import PlaybackState
+from easytv.core.models import MediaItem, PlaybackState
 from easytv.infrastructure.upnp import UpnpTvController
 
 from test_scenarios import LIVING_ROOM
@@ -47,3 +47,16 @@ def test_tv_seek_uses_track_time_and_reads_zero_position(monkeypatch):
     assert (info.state, info.position_s, info.duration_s) == (PlaybackState.PAUSED, 0, None)
     assert info.track_uri == "http://example.test/clip.mp4?v=1&q=2"
     assert actions == ["Seek", "GetTransportInfo", "GetPositionInfo"]
+
+
+def test_streaming_ai_does_not_advertise_seek_in_tv_metadata(monkeypatch):
+    metadata = []
+    def soap(request):
+        if "SetAVTransportURI" in request.headers["SOAPAction"]:
+            body = ET.fromstring(request.content)
+            metadata.append(next(node.text for node in body.iter() if node.tag == "CurrentURIMetaData"))
+        return httpx.Response(200)
+    monkeypatch.setattr(httpx, "AsyncClient", partial(httpx.AsyncClient, transport=httpx.MockTransport(soap)))
+    controller = UpnpTvController()
+    asyncio.run(controller.play(LIVING_ROOM, MediaItem("http://server/enhanced/video.mp4", "AI", "video/mp4", seekable=False)))
+    assert len(metadata) == 1 and "DLNA.ORG_OP=00" in metadata[0]

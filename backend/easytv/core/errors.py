@@ -2,6 +2,15 @@ class EasyTvError(Exception):
     """Base class for domain errors."""
 
 
+class EnhancementUnavailable(EasyTvError):
+    pass
+
+
+class EnhancementPending(EasyTvError):
+    def __init__(self):
+        super().__init__("Готовлю улучшенное видео. Оно запустится после подготовки.")
+
+
 class TvNotFound(EasyTvError):
     def __init__(self, tv_id: str) -> None:
         super().__init__(f"Телевизор {tv_id} не найден")

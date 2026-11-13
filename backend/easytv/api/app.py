@@ -12,6 +12,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 from easytv.container import Container
 from easytv.core.errors import (
+    EnhancementPending,
+    EnhancementUnavailable,
     CatalogError,
     CatalogItemNotFound,
     EasyTvError,
@@ -28,11 +30,13 @@ from easytv.core.errors import (
     VideoNotReady,
 )
 
-from . import catalog, media, routes, stream
+from . import catalog, enhancement, media, routes, stream
 
 log = logging.getLogger(__name__)
 
 _ERROR_STATUS: dict[type[EasyTvError], int] = {
+    EnhancementUnavailable: 503,
+    EnhancementPending: 425,
     TvNotFound: 404,
     TvNotReachable: 422,
     VideoNotFound: 404,
@@ -62,12 +66,14 @@ async def _discovery_loop(c: Container) -> None:
 def create_app(c: Container, stream_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        tasks = [asyncio.create_task(c.playback.watch_queues())]
+        tasks = [asyncio.create_task(c.playback.watch_queues()),
+                 asyncio.create_task(c.enhancement.watch(c.playback.enhancement_queue))]
         if c.settings.discovery_interval_s > 0:
             tasks.append(asyncio.create_task(_discovery_loop(c)))
         try:
             yield
         finally:
+            await c.playback.close()
             for task in tasks:
                 task.cancel()
             for task in tasks:
@@ -86,6 +92,7 @@ def create_app(c: Container, stream_transport: httpx.AsyncBaseTransport | None =
     app.include_router(media.build_router(c.library))
     app.include_router(catalog.build_router(c.catalog, c.cinema, c.library, c.playback))
     app.include_router(stream.build_router(c.catalog, stream_transport))
+    app.include_router(enhancement.build_router(c.enhancement, c.settings.relayvsr_url, stream_transport))
 
     if c.settings.static_dir and (c.settings.static_dir / "index.html").exists():
         _mount_spa(app, c.settings.static_dir)
@@ -99,7 +106,7 @@ def _mount_spa(app: FastAPI, root: Path) -> None:
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> Response:
-        if path.startswith(("api/", "media/", "stream/")):
+        if path.startswith(("api/", "media/", "stream/", "enhanced/")):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         candidate = (root / path).resolve()
         if path and root in candidate.parents and candidate.is_file():

@@ -177,6 +177,8 @@ async def _port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 def didl_metadata(media: MediaItem) -> str:
     flags = DLNA_FLAGS if media.url.startswith("http://") else "*"
+    if not media.seekable:
+        flags = flags.replace("DLNA.ORG_OP=01", "DLNA.ORG_OP=00")
     return (
         '<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" '
         'xmlns:dc="http://purl.org/dc/elements/1.1/" '

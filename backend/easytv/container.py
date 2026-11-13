@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from easytv.config import Settings
 from easytv.core.catalog import CatalogService, CinemaService
+from easytv.core.enhancement import EnhancementService
 from easytv.core.ports import (
     CatalogSource,
     Clock,
@@ -16,6 +17,7 @@ from easytv.core.ports import (
     TvDiscovery,
     TvLocator,
     VideoDownloader,
+    VideoEnhancer,
 )
 from easytv.core.services import PlaybackService, TvService, VideoLibrary
 from easytv.infrastructure.repositories import (
@@ -25,6 +27,7 @@ from easytv.infrastructure.repositories import (
     JsonVideoRepository,
 )
 from easytv.infrastructure.storage import LocalVideoStorage
+from easytv.infrastructure.enhancement import JsonEnhancementSettings, RelayVsrClient
 from easytv.infrastructure.system import LanMediaUrlResolver, SystemClock, UuidGenerator
 
 
@@ -36,6 +39,7 @@ class Container:
     playback: PlaybackService
     catalog: CatalogService
     cinema: CinemaService
+    enhancement: EnhancementService
 
 
 def build_container(
@@ -50,6 +54,7 @@ def build_container(
     fetcher: FileFetcher | None = None,
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
+    enhancer: VideoEnhancer | None = None,
 ) -> Container:
     """Real adapters by default; tests pass fakes for the network-facing ports."""
     if discovery is None:
@@ -106,7 +111,12 @@ def build_container(
     cinema = CinemaService(JsonSavedTitleRepository(settings.data_dir / "cinema.json"), catalog, clock)
     urls = LanMediaUrlResolver(settings.public_host, settings.advertised_port)
     queues = JsonPlaybackQueueRepository(settings.data_dir / "playback-queues.json")
-    playback = PlaybackService(tvs, library, controller, urls, catalog, cinema, queues, ids)
+    enhancement = EnhancementService(
+        enhancer or RelayVsrClient(settings.relayvsr_url),
+        JsonEnhancementSettings(settings.data_dir / "enhancement.json"), library, catalog,
+    )
+    playback = PlaybackService(tvs, library, controller, urls, catalog, cinema, queues, ids, enhancement)
     return Container(
-        settings=settings, tvs=tvs, library=library, playback=playback, catalog=catalog, cinema=cinema
+        settings=settings, tvs=tvs, library=library, playback=playback, catalog=catalog, cinema=cinema,
+        enhancement=enhancement,
     )

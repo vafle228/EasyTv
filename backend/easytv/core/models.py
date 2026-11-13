@@ -69,6 +69,7 @@ class MediaItem:
     url: str
     title: str
     mime: str
+    seekable: bool = True
 
 
 class PlaybackState(str, Enum):
@@ -101,6 +102,40 @@ class PlaybackStatus:
     # What is on screen when it isn't a library video (an episode streamed from a site).
     title: str | None = None
     stream: StreamRef | None = None
+    enhancement_id: str | None = None
+    seekable: bool = True
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class EnhancementSettings:
+    enabled: bool = False
+    streaming: bool = True
+
+
+@dataclass(frozen=True)
+class EnhancementSource:
+    key: str
+    file: str | None = None
+    url: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EnhancementJob:
+    id: str
+    key: str
+    state: str
+    stream_ready: bool = False
+    progress: float | None = None
+    speed: float | None = None
+    error: str | None = None
+    width: int | None = None
+    height: int | None = None
+
+    @property
+    def path(self) -> str:
+        return f"/enhanced/{self.id}.mp4"
 
 
 @dataclass(frozen=True)
