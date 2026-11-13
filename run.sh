@@ -228,6 +228,6 @@ case "${1:-up}" in
   rebuild) cmd_rebuild ;;
   test) cmd_test ;;
   native) cmd_native ;;
-  -h | --help | help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,/^set /s/^# \{0,1\}//p' "$0" ;;
   *) die "Неизвестная команда: $1 (см. ./run.sh help)" ;;
 esac
