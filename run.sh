@@ -8,6 +8,7 @@
 #   ./run.sh rebuild    пересобрать без кэша (например, чтобы обновить yt-dlp)
 #   ./run.sh test       прогнать тесты в Docker
 #   ./run.sh native     запустить без Docker (нужны Python 3.11+ и Node.js)
+#   ./run.sh ai         собрать и запустить с отдельным контейнером RelayVSR
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -89,6 +90,7 @@ discover_for_container() {
 
 compose() {
   local files=(-f docker-compose.yml)
+  [[ "${EASYTV_AI:-off}" == "on" ]] && files+=(-f docker-compose.ai.yml)
   [[ "$EASYTV_NETWORK" == "host" ]] && files+=(-f docker-compose.host.yml)
   docker compose "${files[@]}" "$@"
 }
@@ -128,6 +130,7 @@ print_summary() {
 cmd_up() {
   require_docker
   load_config
+  [[ "${1:-}" == "ai" ]] && export EASYTV_AI=on
   discover_for_container
   print_summary
   info "Собираю и запускаю контейнер…"
@@ -141,6 +144,10 @@ cmd_up() {
     warn "Сервер не ответил за минуту. Посмотрите логи: ./run.sh logs"
     exit 1
   fi
+}
+
+cmd_ai() {
+  cmd_up ai
 }
 
 cmd_discover() {
@@ -166,12 +173,14 @@ cmd_rebuild() {
 cmd_down() {
   require_docker
   load_config
+  export EASYTV_AI=on
   compose down
 }
 
 cmd_logs() {
   require_docker
   load_config
+  export EASYTV_AI=on
   compose logs -f --tail=200
 }
 
@@ -212,6 +221,7 @@ cmd_native() {
 
 case "${1:-up}" in
   up) cmd_up ;;
+  ai) cmd_ai ;;
   down | stop) cmd_down ;;
   logs) cmd_logs ;;
   discover) cmd_discover ;;

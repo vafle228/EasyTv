@@ -34,4 +34,6 @@ CMD ["python", "-m", "easytv"]
 FROM app AS test
 RUN pip install pytest
 COPY backend/tests ./tests
-CMD ["python", "-m", "pytest", "-q", "tests"]
+COPY relayvsr/worker ./relayvsr/worker
+COPY relayvsr/tests ./relayvsr/tests
+CMD ["python", "-m", "pytest", "-q", "tests", "relayvsr/tests"]

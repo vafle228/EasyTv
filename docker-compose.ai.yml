@@ -1,0 +1,32 @@
+services:
+  easytv:
+    environment:
+      EASYTV_RELAYVSR_URL: ${EASYTV_RELAYVSR_URL:-http://relayvsr:8090}
+
+  relayvsr:
+    build:
+      context: .
+      dockerfile: relayvsr/Dockerfile
+    image: easytv-relayvsr:latest
+    gpus: all
+    environment:
+      RELAYVSR_WEIGHTS: /weights
+      RELAYVSR_INPUT: /input
+      RELAYVSR_CACHE: /cache
+      RELAYVSR_CACHE_GB: ${RELAYVSR_CACHE_GB:-30}
+    volumes:
+      - type: bind
+        source: ${RELAYVSR_MODEL_DIR:-D:/RelayVsrModel}
+        target: /weights
+        read_only: true
+      - type: bind
+        source: ./data/videos
+        target: /input
+        read_only: true
+      - type: bind
+        source: ./data/enhanced
+        target: /cache
+    ports:
+      - "127.0.0.1:${RELAYVSR_PORT:-8090}:8090"
+    restart: unless-stopped
+    stop_grace_period: 20s
