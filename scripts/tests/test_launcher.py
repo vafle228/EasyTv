@@ -26,6 +26,9 @@ def launcher(tmp_path):
     }
     for name, script in stubs.items():
         (binaries / name).write_text("#!/usr/bin/env bash\n" + script, encoding="utf-8", newline="\n")
+    # Git for Windows prepends its own tools to PATH when it launches Bash.
+    bash_env = tmp_path / "bash-env"
+    bash_env.write_text('export PATH="$(cygpath -u "$LAUNCHER_BIN"):$PATH"\n', encoding="utf-8")
     log = tmp_path / "docker-args.txt"
 
     def run(command, *, enabled=False, docker_exit=0):
@@ -33,8 +36,13 @@ def launcher(tmp_path):
             "EASYTV_PUBLIC_HOST=127.0.0.1\nEASYTV_HOST_DISCOVERY=off\nEASYTV_NETWORK=bridge\n"
             f"EASYTV_AI={'on' if enabled else 'off'}\n", encoding="utf-8", newline="\n",
         )
-        env = {**os.environ, "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
-               "LAUNCHER_LOG": log.as_posix(), "LAUNCHER_EXIT": str(docker_exit)}
+        env = {
+            **os.environ,
+            "BASH_ENV": bash_env.as_posix(),
+            "LAUNCHER_BIN": binaries.as_posix(),
+            "LAUNCHER_LOG": log.as_posix(),
+            "LAUNCHER_EXIT": str(docker_exit),
+        }
         result = subprocess.run([os.environ["COMSPEC"], "/d", "/c", "run.cmd", command],
                                 cwd=tmp_path, env=env, capture_output=True, encoding="utf-8",
                                 errors="replace", timeout=20)
@@ -66,3 +74,45 @@ def test_windows_launcher_preserves_build_failure(launcher):
     result, arguments = launcher("ai", docker_exit=23)
     assert result.returncode == 23, result.stderr
     assert arguments[-3:] == ["up", "-d", "--build"]
+
+
+@pytest.mark.parametrize(("connected", "address_state", "expected"), [
+    ("8", "Deprecated", "192.168.1.43"),
+    ("8, 12", "Deprecated", "192.168.1.43"),
+    ("8, 12", "Preferred", "192.168.1.40"),
+    ("99", "Preferred", ""),
+])
+def test_windows_detects_usable_source_address(connected, address_state, expected):
+    command = f"""
+    function Get-NetIPInterface {{
+        param($AddressFamily, $ConnectionState)
+        if ($AddressFamily -ne 'IPv4' -or $ConnectionState -ne 'Connected') {{
+            throw 'Expected connected IPv4 interfaces'
+        }}
+        {connected} | ForEach-Object {{ [pscustomobject]@{{ InterfaceIndex = $_ }} }}
+    }}
+    function Get-NetRoute {{
+        param($AddressFamily, $DestinationPrefix)
+        [pscustomobject]@{{ InterfaceIndex = 8; InterfaceMetric = 35; RouteMetric = 0; NextHop = '192.168.1.1' }}
+        [pscustomobject]@{{ InterfaceIndex = 12; InterfaceMetric = 30; RouteMetric = 0; NextHop = '192.168.1.1' }}
+    }}
+    function Find-NetRoute {{
+        param($RemoteIPAddress, $InterfaceIndex, $ErrorAction)
+        if ($RemoteIPAddress -ne '192.168.1.1' -or $InterfaceIndex -notin @({connected})) {{
+            throw 'Unexpected gateway or disconnected interface'
+        }}
+        if ($InterfaceIndex -eq 12) {{
+            [pscustomobject]@{{ IPAddress = '192.168.1.40'; AddressState = '{address_state}'; SkipAsSource = $false }}
+        }} else {{
+            [pscustomobject]@{{ IPAddress = '192.168.1.43'; AddressState = 'Preferred'; SkipAsSource = $false }}
+        }}
+        [pscustomobject]@{{ NextHop = '0.0.0.0' }}
+    }}
+    & './scripts/detect-host-ip.ps1'
+    """
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+        cwd=ROOT, capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
