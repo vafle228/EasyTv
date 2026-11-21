@@ -22,9 +22,9 @@ is_windows() { case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) return 0 ;; *) re
 detect_host_ip() {
   local ip=""
   if is_windows; then
-    ip=$(powershell.exe -NoProfile -Command \
-      "\$r = Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object { \$_.RouteMetric + \$_.InterfaceMetric } | Select-Object -First 1; (Get-NetIPAddress -InterfaceIndex \$r.ifIndex -AddressFamily IPv4).IPAddress" \
-      2>/dev/null | tr -d '\r' | head -n1)
+    ip=$(powershell.exe -NoProfile \
+      -ExecutionPolicy Bypass -File "$(cygpath -w "$PWD/scripts/detect-host-ip.ps1")" \
+      | tr -d '\r') || return 1
   elif [[ "$(uname -s)" == "Darwin" ]]; then
     ip=$(ipconfig getifaddr "$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')" 2>/dev/null || true)
   else
@@ -58,16 +58,21 @@ load_config() {
 
   EASYTV_PORT="${EASYTV_PORT:-8080}"
   EASYTV_NETWORK="${EASYTV_NETWORK:-bridge}"
+  export EASYTV_PORT EASYTV_NETWORK
+}
+
+configure_lan() {
   if [[ -z "${EASYTV_PUBLIC_HOST:-}" ]]; then
-    EASYTV_PUBLIC_HOST="$(detect_host_ip)"
-    [[ -n "$EASYTV_PUBLIC_HOST" ]] || die "Не смог определить IP компьютера в сети. Укажите EASYTV_PUBLIC_HOST в .env"
+    if ! EASYTV_PUBLIC_HOST="$(detect_host_ip)" || [[ -z "$EASYTV_PUBLIC_HOST" ]]; then
+      die "Не смог определить IP компьютера в сети. Укажите EASYTV_PUBLIC_HOST в .env"
+    fi
   fi
   if [[ -z "${EASYTV_SCAN_SUBNETS:-}" ]]; then
     EASYTV_SCAN_SUBNETS="${EASYTV_PUBLIC_HOST%.*}.0/24"
   elif [[ "$EASYTV_SCAN_SUBNETS" == "none" ]]; then
     EASYTV_SCAN_SUBNETS=""
   fi
-  export EASYTV_PORT EASYTV_PUBLIC_HOST EASYTV_SCAN_SUBNETS EASYTV_NETWORK
+  export EASYTV_PUBLIC_HOST EASYTV_SCAN_SUBNETS
 }
 
 discover_for_container() {
@@ -130,6 +135,7 @@ print_summary() {
 cmd_up() {
   require_docker
   load_config
+  configure_lan
   [[ "${1:-}" == "ai" ]] && export EASYTV_AI=on
   discover_for_container
   print_summary
@@ -193,6 +199,7 @@ cmd_test() {
 
 cmd_native() {
   load_config
+  configure_lan
   print_summary
   local py
   py="$(command -v python3 || command -v python || command -v py || true)"
